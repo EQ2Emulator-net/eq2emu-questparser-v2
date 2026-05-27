@@ -1,0 +1,11 @@
+bin/
+obj/
+TestResults/
+artifacts/
+cache/
+output/
+logs/
+*.user
+*.suo
+.vs/
+.serena/

@@ -2,7 +2,41 @@
 
 Fresh .NET 9 quest authoring tool for EQ2Emu.
 
-## Defaults
+## Install
+
+Dependencies:
+
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- Network access to Daybreak Census for quest imports
+- Optional: MariaDB/MySQL access to an EQ2Emu world database for automatic ID resolution
+- Optional: Windows desktop runtime for the WinForms UI. The CLI can run anywhere .NET 9 is supported.
+
+Setup:
+
+```powershell
+git clone <repo-url>
+cd eq2emu-questparser
+dotnet restore
+dotnet build
+```
+
+Run the UI on Windows:
+
+```powershell
+dotnet run --project src\QuestParser.WinForms
+```
+
+Run the CLI:
+
+```powershell
+dotnet run --project src\QuestParser.Cli -- create --quest "A Hunter's Tool" --author "Your Name"
+```
+
+## Configuration
+
+The tool is safe to run without MariaDB configured. Census import still works, generated specs and previews are created, and DB-backed IDs are left unresolved with review TODOs. Configure DB access only when you want automatic quest, NPC, item, spell, faction, race, and zone resolution.
+
+Defaults:
 
 - Census service id: `s:example`
 - Census endpoint: `https://census.daybreakgames.com`
@@ -10,17 +44,24 @@ Fresh .NET 9 quest authoring tool for EQ2Emu.
 - Content root: `./eq2emu-content`
 - Runtime cache/output/log folders: the QuestParser executable directory
 
-## Configuration
-
-The tool is safe to run without MariaDB configured. Census import still works, generated specs and previews are created, and DB-backed IDs are left unresolved with review TODOs. Configure DB access only when you want automatic quest, NPC, item, spell, faction, race, and zone resolution.
-
-Environment variables:
+Optional environment variables:
 
 - `EQ2QP_CENSUS_SERVICE_ID`: Census service id, for example `s:example`.
 - `EQ2QP_CENSUS_BASE_URL`: Census endpoint. Defaults to `https://census.daybreakgames.com`.
 - `EQ2QP_CONTENT_ROOT`: EQ2Emu content root. Defaults to `./eq2emu-content`.
 - `EQ2QP_DB_CONNECTION`: full MariaDB connection string.
 - `EQ2QP_DB_HOST`, `EQ2QP_DB_PORT`, `EQ2QP_DB_NAME`, `EQ2QP_DB_USER`, `EQ2QP_DB_PASSWORD`: individual MariaDB settings used when `EQ2QP_DB_CONNECTION` is not set.
+
+PowerShell example:
+
+```powershell
+$env:EQ2QP_CONTENT_ROOT = "C:\path\to\eq2emu-content"
+$env:EQ2QP_CENSUS_SERVICE_ID = "s:example"
+$env:EQ2QP_DB_HOST = "127.0.0.1"
+$env:EQ2QP_DB_NAME = "eq2emu"
+$env:EQ2QP_DB_USER = "eq2emu"
+$env:EQ2QP_DB_PASSWORD = "<password>"
+```
 
 ## Commands
 

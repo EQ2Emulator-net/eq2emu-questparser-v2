@@ -6,7 +6,6 @@ using System.Text.Json.Serialization;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using QuestParser.Core;
 
 namespace QuestParser.Desktop;
@@ -32,6 +31,7 @@ public partial class MainWindow : Window
 
     private QuestSpec? _spec;
     private ReviewSection? _currentSection;
+    private QuestParserUiSettings _settings = QuestParserUiSettings.Load();
     private bool _loadingSection;
     private bool _refreshingSectionList;
     private bool _busy;
@@ -45,16 +45,13 @@ public partial class MainWindow : Window
         CandidateList.ItemsSource = _candidateRows;
         DiagnosticsList.ItemsSource = _diagnosticRows;
 
-        ContentRootBox.Text = Defaults.ContentRoot;
-        var censusOptions = CensusSourceOptions.FromEnvironment();
-        CensusSourceBox.ItemsSource = Enum.GetValues<CensusSourceKind>();
-        CensusSourceBox.SelectedItem = censusOptions.Kind;
-        CensusLocationBox.Text = LocationForSource(censusOptions);
-
         var dbText = Defaults.HasDatabaseConfiguration
             ? "MariaDB configuration detected."
             : "MariaDB is not configured; references stay editable and unresolved items are shown as review TODOs.";
-        DbConfigText.Text = $"Quest source: {censusOptions.Kind}. {dbText}";
+        DbConfigText.Text = dbText;
+        RefreshSettingsSummary();
+        ApplyUiSettings();
+        _workflow = CreateWorkflowFromSettings();
         TemplateBox.ItemsSource = Enum.GetValues<QuestTemplateKind>().Select(kind => new TemplateChoice(kind)).ToArray();
         TemplateBox.SelectedIndex = 0;
 
@@ -65,12 +62,11 @@ public partial class MainWindow : Window
 
     private void WireActions()
     {
+        SettingsMenuItem.Click += async (_, _) => await OpenSettingsAsync();
+        LayoutSettingsMenuItem.Click += async (_, _) => await OpenSettingsAsync();
         FetchButton.Click += async (_, _) => await RunAsync("Fetch + resolve", FetchAndResolveAsync);
         NewTemplateButton.Click += (_, _) => RunSync("Create template", CreateTemplateQuest);
         PreviewSpecButton.Click += async (_, _) => await RunAsync("Preview spec", LoadSpecPreviewAsync);
-        BrowseContentRootButton.Click += async (_, _) => await BrowseContentRootAsync();
-        BrowseCensusSourceButton.Click += async (_, _) => await BrowseCensusSourceAsync();
-        CensusSourceBox.SelectionChanged += (_, _) => UpdateCensusLocationForSelectedSource();
 
         GenerateButton.Click += async (_, _) => await RunAsync("Generate files", GenerateFilesAsync);
         ResolveSectionButton.Click += async (_, _) => await RunAsync("Resolve section", ResolveCurrentSectionAsync);
@@ -133,13 +129,13 @@ public partial class MainWindow : Window
     private async Task FetchAndResolveAsync()
     {
         var questName = RequiredQuestName();
-        _workflow = CreateWorkflowFromUi();
+        _workflow = CreateWorkflowFromSettings();
 
         ClearLoadedQuestState();
         AppendLog($"Fetching quest source data for '{questName}'.");
         var imported = await _workflow.ImportAsync(
             questName,
-            CleanPath(ContentRootBox.Text, Defaults.ContentRoot),
+            CleanPath(_settings.ContentRoot, Defaults.ContentRoot),
             (AuthorBox.Text ?? "").Trim());
 
         AppendLog($"Quest source import created spec: {imported.Spec.Output.SpecPath}");
@@ -149,7 +145,8 @@ public partial class MainWindow : Window
         _spec = resolved.Spec;
         QuestNameBox.Text = _spec.Quest.Name;
         AuthorBox.Text = _spec.Quest.Author;
-        ContentRootBox.Text = _spec.Output.ContentRoot;
+        _settings = _settings with { ContentRoot = _spec.Output.ContentRoot };
+        RefreshSettingsSummary();
         SpecPathBox.Text = _spec.Output.SpecPath;
 
         await LoadRawCensusTabsAsync(questName);
@@ -170,13 +167,14 @@ public partial class MainWindow : Window
             choice.Kind,
             questName,
             "Uncategorized",
-            CleanPath(ContentRootBox.Text, Defaults.ContentRoot),
+            CleanPath(_settings.ContentRoot, Defaults.ContentRoot),
             (AuthorBox.Text ?? "").Trim());
 
         _spec = result.Spec;
         QuestNameBox.Text = _spec.Quest.Name;
         AuthorBox.Text = _spec.Quest.Author;
-        ContentRootBox.Text = _spec.Output.ContentRoot;
+        _settings = _settings with { ContentRoot = _spec.Output.ContentRoot };
+        RefreshSettingsSummary();
         SpecPathBox.Text = _spec.Output.SpecPath;
         CensusQuestBox.Text = "Manual template. No quest source payload was fetched.";
         CensusGiverBox.Text = "Manual template. No questgiver source payload was fetched.";
@@ -196,7 +194,8 @@ public partial class MainWindow : Window
 
         QuestNameBox.Text = _spec.Quest.Name;
         AuthorBox.Text = _spec.Quest.Author;
-        ContentRootBox.Text = _spec.Output.ContentRoot;
+        _settings = _settings with { ContentRoot = _spec.Output.ContentRoot };
+        RefreshSettingsSummary();
         SpecPathBox.Text = _spec.Output.SpecPath;
         CensusQuestBox.Text = "Loaded from spec. Quest source payload was not fetched in this session.";
         CensusGiverBox.Text = "Loaded from spec. Questgiver source payload was not fetched in this session.";
@@ -281,79 +280,56 @@ public partial class MainWindow : Window
         AppendLog("Section resolution complete. Review candidates or resolved values before verifying.");
     }
 
-    private async Task BrowseContentRootAsync()
+    private async Task OpenSettingsAsync()
     {
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel?.StorageProvider.CanPickFolder != true)
-        {
-            AppendLog("Folder picker is not available on this platform session.");
+        var dialog = new SettingsWindow(_settings);
+        var settings = await dialog.ShowDialog<QuestParserUiSettings?>(this);
+        if (settings is null)
             return;
-        }
 
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Choose EQ2Emu content root",
-            AllowMultiple = false
-        });
-
-        if (folders.Count > 0)
-            ContentRootBox.Text = folders[0].Path.LocalPath;
+        _settings = settings.Normalize();
+        await _settings.SaveAsync();
+        _workflow = CreateWorkflowFromSettings();
+        RefreshSettingsSummary();
+        ApplyUiSettings();
+        AppendLog("Settings updated.");
     }
 
-    private async Task BrowseCensusSourceAsync()
+    private QuestWorkflow CreateWorkflowFromSettings()
     {
-        if (CurrentCensusSourceKind() != CensusSourceKind.Local)
-        {
-            AppendLog("Browse is only used for the local JSON source.");
-            return;
-        }
-
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel?.StorageProvider.CanPickFolder != true)
-        {
-            AppendLog("Folder picker is not available on this platform session.");
-            return;
-        }
-
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Choose downloaded Census JSON folder",
-            AllowMultiple = false
-        });
-
-        if (folders.Count > 0)
-            CensusLocationBox.Text = folders[0].Path.LocalPath;
+        return new QuestWorkflow(censusClient: CensusClientFactory.Create(_settings.ToCensusOptions()));
     }
 
-    private QuestWorkflow CreateWorkflowFromUi()
+    private void RefreshSettingsSummary()
     {
-        var source = CurrentCensusSourceKind();
-        var location = (CensusLocationBox.Text ?? "").Trim();
-        var options = CensusSourceOptions.FromEnvironment().WithOverrides(
-            source: source.ToString(),
-            baseUrl: source == CensusSourceKind.Local ? "" : location,
-            localDirectory: source == CensusSourceKind.Local ? location : "");
-
-        return new QuestWorkflow(censusClient: CensusClientFactory.Create(options));
+        SettingsSummaryText.Text = _settings.Summary();
     }
 
-    private CensusSourceKind CurrentCensusSourceKind()
+    private void ApplyUiSettings()
     {
-        return CensusSourceBox.SelectedItem is CensusSourceKind kind ? kind : CensusSourceKind.Daybreak;
-    }
+        var settings = _settings.Normalize();
 
-    private void UpdateCensusLocationForSelectedSource()
-    {
-        var options = CensusSourceOptions.FromEnvironment() with { Kind = CurrentCensusSourceKind() };
-        CensusLocationBox.Text = LocationForSource(options);
-        RefreshActionStates();
-    }
+        FontSize = settings.TextSize;
+        QuestSourceGroup.IsVisible = settings.ShowQuestSourcePanel;
+        SettingsSummaryText.IsVisible = settings.ShowSettingsSummary;
+        VerificationGroup.IsVisible = settings.ShowVerificationSteps;
+        VerificationSplitter.IsVisible = settings.ShowVerificationSteps;
+        WorkGrid.ColumnDefinitions[0].Width = settings.ShowVerificationSteps
+            ? new GridLength(settings.SidebarWidth)
+            : new GridLength(0);
+        WorkGrid.ColumnDefinitions[1].Width = settings.ShowVerificationSteps
+            ? new GridLength(8)
+            : new GridLength(0);
 
-    private static string LocationForSource(CensusSourceOptions options)
-    {
-        return options.Kind == CensusSourceKind.Local
-            ? options.LocalDirectory ?? ""
-            : options.BaseUrl;
+        SourceDataGroup.IsVisible = settings.ShowSourceDataPanel;
+        ReviewLayout.RowDefinitions[1].Height = settings.ShowSourceDataPanel
+            ? new GridLength(settings.SourcePanelHeight)
+            : new GridLength(0);
+        SectionDetailsTabs.IsVisible = settings.ShowCandidatePanel;
+        ReviewLayout.RowDefinitions[3].Height = settings.ShowCandidatePanel
+            ? new GridLength(settings.DetailsPanelHeight)
+            : new GridLength(0);
+        ProgressGroup.IsVisible = settings.ShowProgressPanel;
     }
 
     private async Task LoadRawCensusTabsAsync(string questName)
@@ -857,7 +833,8 @@ public partial class MainWindow : Window
         spec.Output.SqlPath = ReadText("output.sql");
         spec.Output.MissingReportPath = ReadText("output.missing");
         spec.Output.PreviewPath = ReadText("output.preview");
-        ContentRootBox.Text = spec.Output.ContentRoot;
+        _settings = _settings with { ContentRoot = spec.Output.ContentRoot };
+        RefreshSettingsSummary();
         SpecPathBox.Text = spec.Output.SpecPath;
     }
 
@@ -1529,8 +1506,8 @@ public partial class MainWindow : Window
         FetchButton.IsEnabled = !_busy;
         NewTemplateButton.IsEnabled = !_busy;
         PreviewSpecButton.IsEnabled = !_busy;
-        BrowseContentRootButton.IsEnabled = !_busy;
-        BrowseCensusSourceButton.IsEnabled = !_busy && CurrentCensusSourceKind() == CensusSourceKind.Local;
+        SettingsMenuItem.IsEnabled = !_busy;
+        LayoutSettingsMenuItem.IsEnabled = !_busy;
         PreviousButton.IsEnabled = !_busy && loaded;
         NextButton.IsEnabled = !_busy && loaded;
         ResolveSectionButton.IsEnabled = !_busy && loaded;

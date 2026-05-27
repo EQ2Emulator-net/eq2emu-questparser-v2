@@ -9,99 +9,109 @@
         Height="860"
         MinWidth="1100"
         MinHeight="720"
-        Background="#F3F3F3">
-    <Grid RowDefinitions="Auto,*,Auto" Margin="8" RowSpacing="8">
-        <GroupBox Grid.Row="0" Header="Quest Source" Padding="8">
-            <Grid ColumnDefinitions="86,2*,60,*,84,2*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+        FontFamily="Inter, Segoe UI, sans-serif"
+        FontSize="13"
+        Background="#EEF2F7">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12" RowSpacing="10">
+        <Menu Grid.Row="0">
+            <MenuItem Header="_File">
+                <MenuItem Name="SettingsMenuItem" Header="_Settings..." />
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Name="LayoutSettingsMenuItem" Header="_Layout and visibility..." />
+            </MenuItem>
+        </Menu>
+
+        <GroupBox Grid.Row="1" Name="QuestSourceGroup" Header="Quest Source" Padding="12">
+            <Grid ColumnDefinitions="90,2*,64,*,96,2*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Quest name" VerticalAlignment="Center" />
-                <TextBox Grid.Row="0" Grid.Column="1" Name="QuestNameBox" />
+                <TextBox Grid.Row="0" Grid.Column="1" Name="QuestNameBox" PlaceholderText="e.g. gnoll_slayer" />
 
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Author" VerticalAlignment="Center" />
                 <TextBox Grid.Row="0" Grid.Column="3" Name="AuthorBox" />
-
-                <TextBlock Grid.Row="0" Grid.Column="4" Text="Content root" VerticalAlignment="Center" />
-                <DockPanel Grid.Row="0" Grid.Column="5">
-                    <Button Name="BrowseContentRootButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="84" Margin="6,0,0,0" />
-                    <TextBox Name="ContentRootBox" />
-                </DockPanel>
 
                 <CheckBox Grid.Row="0" Grid.Column="6" Name="OverwriteBox" Content="Overwrite Lua" VerticalAlignment="Center" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Template" VerticalAlignment="Center" />
                 <ComboBox Grid.Row="1" Grid.Column="1" Name="TemplateBox" />
-                <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Name="NewTemplateButton" Content="New Template" HorizontalAlignment="Left" MinWidth="120" />
+                <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Name="NewTemplateButton" Content="New Template" HorizontalAlignment="Left" MinWidth="124" />
 
                 <TextBlock Grid.Row="1" Grid.Column="4" Text="Spec path" VerticalAlignment="Center" />
-                <TextBox Grid.Row="1" Grid.Column="5" Name="SpecPathBox" />
+                <TextBox Grid.Row="1" Grid.Column="5" Name="SpecPathBox" PlaceholderText="Generated or existing quest spec path" />
                 <StackPanel Grid.Row="1" Grid.Column="6" Orientation="Horizontal" Spacing="8">
-                    <Button Name="PreviewSpecButton" Content="Preview Spec" MinWidth="104" />
-                    <Button Name="FetchButton" Content="Fetch + Resolve" MinWidth="120" />
+                    <Button Name="PreviewSpecButton" Content="Preview Spec" MinWidth="108" />
+                    <Button Name="FetchButton" Classes="primary" Content="Fetch + Resolve" MinWidth="126" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="Data source" VerticalAlignment="Center" />
-                <ComboBox Grid.Row="2" Grid.Column="1" Name="CensusSourceBox" />
-                <TextBlock Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Text="Source URL or local JSON folder" VerticalAlignment="Center" />
-                <DockPanel Grid.Row="2" Grid.Column="5">
-                    <Button Name="BrowseCensusSourceButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="84" Margin="6,0,0,0" />
-                    <TextBox Name="CensusLocationBox" />
-                </DockPanel>
+                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Classes="status-strip">
+                    <TextBlock Name="SettingsSummaryText"
+                               Foreground="#334155"
+                               TextWrapping="Wrap" />
+                </Border>
 
-                <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="7"
-                           Name="DbConfigText"
-                           Foreground="#666666"
-                           Text="MariaDB is optional. Without DB configuration, unresolved references remain as review TODOs." />
+                <Border Grid.Row="2" Grid.Column="4" Grid.ColumnSpan="3" Classes="status-strip">
+                    <TextBlock Name="DbConfigText"
+                               Foreground="#334155"
+                               TextWrapping="Wrap"
+                               Text="MariaDB is optional. Without DB configuration, unresolved references remain as review TODOs." />
+                </Border>
             </Grid>
         </GroupBox>
 
-        <Grid Grid.Row="1" ColumnDefinitions="310,6,*">
-            <GroupBox Grid.Column="0" Header="Verification Steps" Padding="6">
+        <Grid Grid.Row="2" Name="WorkGrid" ColumnDefinitions="320,8,*">
+            <GroupBox Grid.Column="0" Name="VerificationGroup" Header="Verification Steps" Padding="8">
                 <ListBox Name="SectionList" />
             </GroupBox>
 
-            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="#D6D6D6" />
+            <GridSplitter Grid.Column="1"
+                          Name="VerificationSplitter"
+                          Width="8"
+                          HorizontalAlignment="Stretch"
+                          Background="#64748B"
+                          ToolTip.Tip="Drag to resize verification steps" />
 
             <TabControl Grid.Column="2" Name="MainTabs">
                 <TabItem Header="Review">
-                    <Grid RowDefinitions="Auto,160,*,220" RowSpacing="8" Margin="6">
-                        <Border Grid.Row="0" BorderBrush="#D2D2D2" BorderThickness="1" Background="#FAFAFA" Padding="8">
+                    <Grid Name="ReviewLayout" RowDefinitions="Auto,160,*,230" RowSpacing="10" Margin="8">
+                        <Border Grid.Row="0" Classes="section-banner" Padding="12">
                             <StackPanel>
-                                <TextBlock Name="SectionTitleText" FontSize="16" FontWeight="SemiBold" />
-                                <TextBlock Name="SectionHelpText" Foreground="#666666" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                <TextBlock Name="SectionTitleText" FontSize="17" FontWeight="SemiBold" />
+                                <TextBlock Name="SectionHelpText" Foreground="#334155" TextWrapping="Wrap" Margin="0,4,0,0" />
                             </StackPanel>
                         </Border>
 
-                        <GroupBox Grid.Row="1" Header="Quest Source and DB Data Used by This Section" Padding="6">
-                            <ListBox Name="SourceList" FontFamily="Consolas,Menlo,monospace" />
+                        <GroupBox Grid.Row="1" Name="SourceDataGroup" Header="Quest Source and DB Data Used by This Section" Padding="8">
+                            <ListBox Name="SourceList" Classes="mono-list" />
                         </GroupBox>
 
-                        <GroupBox Grid.Row="2" Header="Editable Quest Spec Values" Padding="6">
+                        <GroupBox Grid.Row="2" Header="Editable Quest Spec Values" Padding="8">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                <StackPanel Name="EditorHost" Spacing="4" />
+                                <StackPanel Name="EditorHost" Spacing="6" />
                             </ScrollViewer>
                         </GroupBox>
 
-                        <TabControl Grid.Row="3">
+                        <TabControl Grid.Row="3" Name="SectionDetailsTabs">
                             <TabItem Header="DB Candidates">
-                                <Grid RowDefinitions="*,Auto" Margin="6" RowSpacing="6">
-                                    <ListBox Grid.Row="0" Name="CandidateList" FontFamily="Consolas,Menlo,monospace" />
-                                    <Button Grid.Row="1" Name="UseCandidateButton" Content="Use Selected Candidate" HorizontalAlignment="Right" MinWidth="160" />
+                                <Grid RowDefinitions="*,Auto" Margin="8" RowSpacing="8">
+                                    <ListBox Grid.Row="0" Name="CandidateList" Classes="mono-list" />
+                                    <Button Grid.Row="1" Name="UseCandidateButton" Content="Use Selected Candidate" HorizontalAlignment="Right" MinWidth="168" />
                                 </Grid>
                             </TabItem>
                             <TabItem Header="Current Lua">
                                 <TextBox Name="SectionLuaBox"
+                                         Classes="mono-box"
                                          IsReadOnly="True"
                                          AcceptsReturn="True"
                                          TextWrapping="NoWrap"
-                                         FontFamily="Consolas,Menlo,monospace"
                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                                          ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                             </TabItem>
                             <TabItem Header="Missing Spawn Wizard">
                                 <TextBox Name="MissingSpawnBox"
+                                         Classes="mono-box"
                                          IsReadOnly="True"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
-                                         FontFamily="Consolas,Menlo,monospace"
                                          ScrollViewer.VerticalScrollBarVisibility="Auto" />
                             </TabItem>
                         </TabControl>
@@ -109,58 +119,58 @@
                 </TabItem>
 
                 <TabItem Header="Generated / Raw Data">
-                    <TabControl Margin="6">
+                    <TabControl Margin="8">
                         <TabItem Header="Diagnostics">
-                            <Grid RowDefinitions="*,Auto" Margin="6" RowSpacing="6">
-                                <ListBox Grid.Row="0" Name="DiagnosticsList" FontFamily="Consolas,Menlo,monospace" />
+                            <Grid RowDefinitions="*,Auto" Margin="8" RowSpacing="8">
+                                <ListBox Grid.Row="0" Name="DiagnosticsList" Classes="mono-list" />
                                 <CheckBox Grid.Row="1" Name="AcknowledgeDiagnosticsBox" Content="Acknowledge blockers and allow generation" />
                             </Grid>
                         </TabItem>
                         <TabItem Header="Lua Preview">
-                            <TextBox Name="LuaPreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                            <TextBox Name="LuaPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                         <TabItem Header="SQL Preview">
-                            <TextBox Name="SqlPreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                            <TextBox Name="SqlPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                         <TabItem Header="Missing Report">
-                            <TextBox Name="MissingPreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                            <TextBox Name="MissingPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" />
                         </TabItem>
                         <TabItem Header="Spec JSON">
-                            <TextBox Name="SpecPreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                            <TextBox Name="SpecPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                         <TabItem Header="Quest Source JSON">
-                            <TextBox Name="CensusQuestBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                            <TextBox Name="CensusQuestBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                         <TabItem Header="Questgiver Source JSON">
-                            <TextBox Name="CensusGiverBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                            <TextBox Name="CensusGiverBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                     </TabControl>
                 </TabItem>
 
                 <TabItem Header="Log">
                     <TextBox Name="LogBox"
-                             Margin="6"
+                             Classes="mono-box"
+                             Margin="8"
                              IsReadOnly="True"
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
-                             FontFamily="Consolas,Menlo,monospace"
                              ScrollViewer.VerticalScrollBarVisibility="Auto" />
                 </TabItem>
             </TabControl>
         </Grid>
 
-        <GroupBox Grid.Row="2" Header="Progress" Padding="8">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                <StackPanel Grid.Column="0" Spacing="3">
+        <GroupBox Grid.Row="3" Name="ProgressGroup" Header="Progress" Padding="12">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                <StackPanel Grid.Column="0" Spacing="4">
                     <TextBlock Name="StatusText" Text="Ready" FontWeight="SemiBold" />
-                    <TextBlock Name="ProgressText" Text="Load or create a quest, then verify each section before generation." Foreground="#666666" TextWrapping="Wrap" />
+                    <TextBlock Name="ProgressText" Foreground="#334155" Text="Load or create a quest, then verify each section before generation." TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Name="PreviousButton" Content="Previous" MinWidth="90" />
-                    <Button Name="ResolveSectionButton" Content="Resolve Section" MinWidth="124" />
-                    <Button Name="VerifyButton" Content="Verify Section" MinWidth="124" />
-                    <Button Name="NextButton" Content="Next" MinWidth="90" />
-                    <Button Name="GenerateButton" Content="Generate Files" MinWidth="130" />
+                    <Button Name="PreviousButton" Content="Previous" MinWidth="92" />
+                    <Button Name="ResolveSectionButton" Content="Resolve Section" MinWidth="128" />
+                    <Button Name="VerifyButton" Content="Verify Section" MinWidth="128" />
+                    <Button Name="NextButton" Content="Next" MinWidth="92" />
+                    <Button Name="GenerateButton" Classes="primary" Content="Generate Files" MinWidth="132" />
                 </StackPanel>
             </Grid>
         </GroupBox>

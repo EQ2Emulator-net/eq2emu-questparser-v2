@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="QuestParser.Desktop.SettingsWindow"
+        Title="QuestParser Settings"
+        Width="760"
+        Height="640"
+        MinWidth="640"
+        MinHeight="520"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Inter, Segoe UI, sans-serif"
+        FontSize="13"
+        Background="#EEF2F7">
+    <Grid RowDefinitions="*,Auto" Margin="14" RowSpacing="12">
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12">
+                <GroupBox Header="Paths and Quest Source" Padding="12">
+                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Content root" VerticalAlignment="Center" />
+                        <DockPanel Grid.Row="0" Grid.Column="1">
+                            <Button Name="BrowseContentRootButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
+                            <TextBox Name="ContentRootBox" PlaceholderText="EQ2Emu content root" />
+                        </DockPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Quest source" VerticalAlignment="Center" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" Name="CensusSourceBox" Width="190" HorizontalAlignment="Left" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Source URL/folder" VerticalAlignment="Center" />
+                        <DockPanel Grid.Row="2" Grid.Column="1">
+                            <Button Name="BrowseSourceButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
+                            <TextBox Name="SourceLocationBox" PlaceholderText="Census URL or local JSON folder" />
+                        </DockPanel>
+
+                        <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Classes="status-strip">
+                            <TextBlock Name="SourceHelpText" Foreground="#334155" TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Layout and Visibility" Padding="12">
+                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="18" RowSpacing="14">
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="8">
+                            <TextBlock Text="Show or hide regions" FontWeight="SemiBold" />
+                            <CheckBox Name="ShowQuestSourceBox" Content="Quest source header" />
+                            <CheckBox Name="ShowSettingsSummaryBox" Content="Settings summary strip" />
+                            <CheckBox Name="ShowVerificationStepsBox" Content="Verification steps sidebar" />
+                            <CheckBox Name="ShowSourceDataPanelBox" Content="Source and DB data panel" />
+                            <CheckBox Name="ShowCandidatePanelBox" Content="DB candidates / Lua / missing wizard panel" />
+                            <CheckBox Name="ShowProgressPanelBox" Content="Progress footer" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="0" Grid.Column="1" ColumnDefinitions="150,*,56" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="12">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Sidebar width" VerticalAlignment="Center" />
+                            <Slider Grid.Row="0" Grid.Column="1" Name="SidebarWidthSlider" Minimum="220" Maximum="520" TickFrequency="10" IsSnapToTickEnabled="True" />
+                            <TextBlock Grid.Row="0" Grid.Column="2" Name="SidebarWidthValueText" VerticalAlignment="Center" HorizontalAlignment="Right" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Source panel" VerticalAlignment="Center" />
+                            <Slider Grid.Row="1" Grid.Column="1" Name="SourcePanelHeightSlider" Minimum="90" Maximum="260" TickFrequency="10" IsSnapToTickEnabled="True" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Name="SourcePanelHeightValueText" VerticalAlignment="Center" HorizontalAlignment="Right" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Details panel" VerticalAlignment="Center" />
+                            <Slider Grid.Row="2" Grid.Column="1" Name="DetailsPanelHeightSlider" Minimum="140" Maximum="380" TickFrequency="10" IsSnapToTickEnabled="True" />
+                            <TextBlock Grid.Row="2" Grid.Column="2" Name="DetailsPanelHeightValueText" VerticalAlignment="Center" HorizontalAlignment="Right" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Text size" VerticalAlignment="Center" />
+                            <Slider Grid.Row="3" Grid.Column="1" Name="TextSizeSlider" Minimum="12" Maximum="18" TickFrequency="1" IsSnapToTickEnabled="True" />
+                            <TextBlock Grid.Row="3" Grid.Column="2" Name="TextSizeValueText" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                        </Grid>
+
+                        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="status-strip">
+                            <TextBlock Foreground="#334155" Text="Hidden regions keep their data and can be restored here. Splitters still work for temporary resizing during a session." TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <Button Grid.Column="0" Name="ResetLayoutButton" Content="Reset Layout" MinWidth="110" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Name="CancelButton" Content="Cancel" MinWidth="92" />
+                <Button Name="SaveButton" Classes="primary" Content="Save" MinWidth="92" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

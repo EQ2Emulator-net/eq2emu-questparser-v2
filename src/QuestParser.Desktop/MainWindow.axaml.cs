@@ -38,10 +38,6 @@ public partial class MainWindow : Window
         CandidateList.ItemsSource = _candidateRows;
         DiagnosticsList.ItemsSource = _diagnosticRows;
 
-        var dbText = Defaults.HasDatabaseConfiguration
-            ? "MariaDB configuration detected."
-            : "MariaDB is not configured; references stay editable and unresolved items are shown as review TODOs.";
-        DbConfigText.Text = dbText;
         RefreshSettingsSummary();
         ApplyUiSettings();
         _workflow = CreateWorkflowFromSettings();
@@ -290,12 +286,16 @@ public partial class MainWindow : Window
 
     private QuestWorkflow CreateWorkflowFromSettings()
     {
-        return new QuestWorkflow(censusClient: CensusClientFactory.Create(_settings.ToCensusOptions()));
+        var settings = _settings.Normalize();
+        return new QuestWorkflow(
+            censusClient: CensusClientFactory.Create(settings.ToCensusOptions()),
+            resolver: settings.CreateDatabaseResolver());
     }
 
     private void RefreshSettingsSummary()
     {
         SettingsSummaryText.Text = _settings.Summary();
+        DbConfigText.Text = _settings.DatabaseSummary();
     }
 
     private void ApplyUiSettings()
@@ -351,8 +351,9 @@ public partial class MainWindow : Window
 
     private async Task LoadRawCensusTabsAsync(string questName)
     {
-        CensusQuestBox.Text = await ReadIfExistsAsync(Path.Combine(Defaults.CensusCacheDirectory, CensusClient.QuestJsonFileName(questName)));
-        CensusGiverBox.Text = await ReadIfExistsAsync(Path.Combine(Defaults.CensusCacheDirectory, CensusClient.QuestGiverJsonFileName(questName)));
+        var cacheDirectory = _settings.Normalize().CensusCacheDirectory;
+        CensusQuestBox.Text = await ReadIfExistsAsync(Path.Combine(cacheDirectory, CensusClient.QuestJsonFileName(questName)));
+        CensusGiverBox.Text = await ReadIfExistsAsync(Path.Combine(cacheDirectory, CensusClient.QuestGiverJsonFileName(questName)));
     }
 
     private static async Task<string> ReadIfExistsAsync(string path)

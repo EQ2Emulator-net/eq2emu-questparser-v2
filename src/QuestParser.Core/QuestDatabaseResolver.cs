@@ -26,11 +26,33 @@ public static class QuestDatabaseResolverFactory
 {
     public static IQuestDatabaseResolver CreateDefault()
     {
-        if (!Defaults.HasDatabaseConfiguration)
+        return Create(
+            enabled: true,
+            connectionString: Defaults.DbConnectionString,
+            host: Defaults.DbHost,
+            port: Defaults.DbPort,
+            database: Defaults.DbName,
+            user: Defaults.DbUser,
+            password: Defaults.DbPassword);
+    }
+
+    public static IQuestDatabaseResolver Create(
+        bool enabled,
+        string? connectionString,
+        string? host,
+        uint port,
+        string? database,
+        string? user,
+        string? password)
+    {
+        if (!enabled)
+            return new MissingQuestDatabaseResolver("Database connection is disabled.");
+
+        if (!MariaDbQuestDatabaseResolver.HasDatabaseConfiguration(connectionString, host, database, user))
             return new MissingQuestDatabaseResolver("Database connection is not configured.");
 
         return new ResilientQuestDatabaseResolver(
-            new MariaDbQuestDatabaseResolver(),
+            new MariaDbQuestDatabaseResolver(MariaDbQuestDatabaseResolver.BuildConnectionString(connectionString, host, port, database, user, password)),
             "Database connection failed.");
     }
 }
@@ -193,24 +215,50 @@ public sealed class MariaDbQuestDatabaseResolver : IQuestDatabaseResolver
 
     public static string BuildDefaultConnectionString()
     {
-        if (!Defaults.HasDatabaseConfiguration)
+        return BuildConnectionString(
+            Defaults.DbConnectionString,
+            Defaults.DbHost,
+            Defaults.DbPort,
+            Defaults.DbName,
+            Defaults.DbUser,
+            Defaults.DbPassword);
+    }
+
+    public static bool HasDatabaseConfiguration(string? connectionString, string? host, string? database, string? user)
+    {
+        return !string.IsNullOrWhiteSpace(connectionString)
+            || (!string.IsNullOrWhiteSpace(host)
+                && !string.IsNullOrWhiteSpace(database)
+                && !string.IsNullOrWhiteSpace(user));
+    }
+
+    public static string BuildConnectionString(string? connectionString, string? host, uint port, string? database, string? user, string? password)
+    {
+        if (!string.IsNullOrWhiteSpace(connectionString))
+            return connectionString.Trim();
+
+        if (!HasDatabaseConfiguration(connectionString, host, database, user))
             throw new InvalidOperationException("Database connection is not configured.");
-        if (!string.IsNullOrWhiteSpace(Defaults.DbConnectionString))
-            return Defaults.DbConnectionString;
 
         var builder = new MySqlConnectionStringBuilder
         {
-            Server = Defaults.DbHost,
-            Port = Defaults.DbPort,
-            Database = Defaults.DbName,
-            UserID = Defaults.DbUser,
-            Password = Defaults.DbPassword,
+            Server = host?.Trim(),
+            Port = port == 0 ? Defaults.DefaultDbPort : port,
+            Database = database?.Trim(),
+            UserID = user?.Trim(),
+            Password = password?.Trim(),
             SslMode = MySqlSslMode.None,
             AllowUserVariables = true,
             ConnectionTimeout = 10,
             DefaultCommandTimeout = 30
         };
         return builder.ConnectionString;
+    }
+
+    public static async Task TestConnectionAsync(string connectionString, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ResolveAsync(QuestSpec spec, CancellationToken cancellationToken = default)

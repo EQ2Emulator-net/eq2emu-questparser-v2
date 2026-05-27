@@ -24,7 +24,27 @@ public sealed record QuestParserUiSettings
 
     public string ContentRoot { get; init; } = Defaults.ContentRoot;
     public CensusSourceKind SourceKind { get; init; } = CensusSourceKind.Daybreak;
-    public string SourceLocation { get; init; } = Defaults.CensusBaseUrl;
+
+    // Kept for compatibility with desktop-settings.json files written before
+    // the Census options were split into README-aligned fields.
+    public string SourceLocation { get; init; } = "";
+
+    public string CensusServiceId { get; init; } = Defaults.CensusServiceId;
+    public string CensusBaseUrl { get; init; } = Defaults.CensusBaseUrl;
+    public string CensusRemoteBaseUrl { get; init; } = Defaults.CensusRemoteBaseUrl;
+    public bool CensusIncludeServiceId { get; init; } = Defaults.CensusIncludeServiceId;
+    public string CensusLocalDirectory { get; init; } = Defaults.CensusLocalDirectory ?? "";
+    public string CensusCacheDirectory { get; init; } = Defaults.CensusCacheDirectory;
+
+    public bool UseDatabaseConnection { get; init; } = Defaults.HasDatabaseConfiguration;
+    public bool UseDbConnectionString { get; init; } = !string.IsNullOrWhiteSpace(Defaults.DbConnectionString);
+    public string DbConnectionString { get; init; } = Defaults.DbConnectionString ?? "";
+    public string DbHost { get; init; } = Defaults.DbHost ?? "";
+    public uint DbPort { get; init; } = Defaults.DbPort;
+    public string DbName { get; init; } = Defaults.DbName ?? "";
+    public string DbUser { get; init; } = Defaults.DbUser ?? "";
+    public string DbPassword { get; init; } = Defaults.DbPassword ?? "";
+
     public bool ShowQuestSourcePanel { get; init; } = true;
     public bool ShowSettingsSummary { get; init; } = true;
     public bool ShowVerificationSteps { get; init; } = true;
@@ -49,6 +69,19 @@ public sealed record QuestParserUiSettings
         ContentRoot = contentRoot;
         SourceKind = sourceKind;
         SourceLocation = sourceLocation;
+
+        switch (sourceKind)
+        {
+            case CensusSourceKind.Daybreak:
+                CensusBaseUrl = sourceLocation;
+                break;
+            case CensusSourceKind.Remote:
+                CensusRemoteBaseUrl = sourceLocation;
+                break;
+            case CensusSourceKind.Local:
+                CensusLocalDirectory = sourceLocation;
+                break;
+        }
     }
 
     public static QuestParserUiSettings Load()
@@ -83,30 +116,148 @@ public sealed record QuestParserUiSettings
         {
             ContentRoot = Defaults.ContentRoot,
             SourceKind = census.Kind,
-            SourceLocation = LocationFor(census.Kind, census)
-        };
+            SourceLocation = LocationFor(census.Kind, Defaults.CensusBaseUrl, Defaults.CensusRemoteBaseUrl, Defaults.CensusLocalDirectory ?? ""),
+            CensusServiceId = census.ServiceId,
+            CensusBaseUrl = Defaults.CensusBaseUrl,
+            CensusRemoteBaseUrl = Defaults.CensusRemoteBaseUrl,
+            CensusIncludeServiceId = census.IncludeServiceId,
+            CensusLocalDirectory = census.LocalDirectory ?? "",
+            CensusCacheDirectory = census.CacheDirectory,
+            UseDatabaseConnection = Defaults.HasDatabaseConfiguration,
+            UseDbConnectionString = !string.IsNullOrWhiteSpace(Defaults.DbConnectionString),
+            DbConnectionString = Defaults.DbConnectionString ?? "",
+            DbHost = Defaults.DbHost ?? "",
+            DbPort = Defaults.DbPort,
+            DbName = Defaults.DbName ?? "",
+            DbUser = Defaults.DbUser ?? "",
+            DbPassword = Defaults.DbPassword ?? ""
+        }.Normalize();
     }
 
     public CensusSourceOptions ToCensusOptions()
     {
-        return CensusSourceOptions.FromEnvironment().WithOverrides(
-            source: SourceKind.ToString(),
-            baseUrl: SourceKind == CensusSourceKind.Local ? "" : SourceLocation,
-            localDirectory: SourceKind == CensusSourceKind.Local ? SourceLocation : "");
+        var settings = Normalize();
+        return new CensusSourceOptions
+        {
+            Kind = settings.SourceKind,
+            BaseUrl = settings.SourceKind == CensusSourceKind.Remote
+                ? settings.CensusRemoteBaseUrl
+                : settings.CensusBaseUrl,
+            ServiceId = settings.CensusServiceId,
+            IncludeServiceId = settings.CensusIncludeServiceId,
+            CacheDirectory = settings.CensusCacheDirectory,
+            LocalDirectory = settings.CensusLocalDirectory
+        };
+    }
+
+    public IQuestDatabaseResolver CreateDatabaseResolver()
+    {
+        var settings = Normalize();
+        return QuestDatabaseResolverFactory.Create(
+            settings.UseDatabaseConnection,
+            settings.UseDbConnectionString ? settings.DbConnectionString : null,
+            settings.DbHost,
+            settings.DbPort,
+            settings.DbName,
+            settings.DbUser,
+            settings.DbPassword);
+    }
+
+    public bool HasDatabaseConfiguration()
+    {
+        var settings = Normalize();
+        if (!settings.UseDatabaseConnection)
+            return false;
+
+        return MariaDbQuestDatabaseResolver.HasDatabaseConfiguration(
+            settings.UseDbConnectionString ? settings.DbConnectionString : null,
+            settings.DbHost,
+            settings.DbName,
+            settings.DbUser);
+    }
+
+    public string BuildDatabaseConnectionString()
+    {
+        var settings = Normalize();
+        if (!settings.UseDatabaseConnection)
+            throw new InvalidOperationException("Database connection is disabled.");
+
+        return MariaDbQuestDatabaseResolver.BuildConnectionString(
+            settings.UseDbConnectionString ? settings.DbConnectionString : null,
+            settings.DbHost,
+            settings.DbPort,
+            settings.DbName,
+            settings.DbUser,
+            settings.DbPassword);
     }
 
     public string Summary()
     {
-        var location = string.IsNullOrWhiteSpace(SourceLocation) ? "(not set)" : SourceLocation;
-        return $"Content root: {ContentRoot} | Quest source: {SourceKind} | {location}";
+        var settings = Normalize();
+        var location = LocationFor(settings.SourceKind, settings.CensusBaseUrl, settings.CensusRemoteBaseUrl, settings.CensusLocalDirectory);
+        if (string.IsNullOrWhiteSpace(location))
+            location = "(not set)";
+
+        return $"Content root: {settings.ContentRoot} | Quest source: {settings.SourceKind} | {location} | Census cache: {settings.CensusCacheDirectory} | {settings.DatabaseSummary()}";
+    }
+
+    public string DatabaseSummary()
+    {
+        var settings = Normalize();
+        if (!settings.UseDatabaseConnection)
+            return "MariaDB disabled";
+
+        if (!settings.HasDatabaseConfiguration())
+            return "MariaDB enabled but incomplete";
+
+        return settings.UseDbConnectionString
+            ? "MariaDB configured with connection string"
+            : $"MariaDB configured for {settings.DbUser}@{settings.DbHost}:{settings.DbPort}/{settings.DbName}";
     }
 
     public QuestParserUiSettings Normalize()
     {
+        var censusBaseUrl = CleanUrl(CensusBaseUrl, Defaults.CensusBaseUrl);
+        var censusRemoteBaseUrl = CleanUrl(CensusRemoteBaseUrl, Defaults.CensusRemoteBaseUrl);
+        var censusLocalDirectory = CleanOptional(CensusLocalDirectory);
+        var legacyLocation = CleanOptional(SourceLocation);
+
+        if (!string.IsNullOrWhiteSpace(legacyLocation))
+        {
+            switch (SourceKind)
+            {
+                case CensusSourceKind.Daybreak:
+                    censusBaseUrl = CleanUrl(legacyLocation, Defaults.CensusBaseUrl);
+                    break;
+                case CensusSourceKind.Remote:
+                    censusRemoteBaseUrl = CleanUrl(legacyLocation, Defaults.CensusRemoteBaseUrl);
+                    break;
+                case CensusSourceKind.Local:
+                    censusLocalDirectory = legacyLocation;
+                    break;
+            }
+        }
+
+        censusLocalDirectory = string.IsNullOrWhiteSpace(censusLocalDirectory)
+            ? Defaults.CensusLocalDirectory ?? ""
+            : censusLocalDirectory;
+
         return this with
         {
             ContentRoot = Clean(ContentRoot, Defaults.ContentRoot),
-            SourceLocation = Clean(SourceLocation, DefaultLocationFor(SourceKind)),
+            SourceLocation = LocationFor(SourceKind, censusBaseUrl, censusRemoteBaseUrl, censusLocalDirectory),
+            CensusServiceId = Clean(CensusServiceId, Defaults.CensusServiceId),
+            CensusBaseUrl = censusBaseUrl,
+            CensusRemoteBaseUrl = censusRemoteBaseUrl,
+            CensusIncludeServiceId = CensusIncludeServiceId,
+            CensusLocalDirectory = censusLocalDirectory,
+            CensusCacheDirectory = Clean(CensusCacheDirectory, Defaults.CensusCacheDirectory),
+            DbConnectionString = CleanOptional(DbConnectionString),
+            DbHost = CleanOptional(DbHost),
+            DbPort = DbPort == 0 ? Defaults.DefaultDbPort : DbPort,
+            DbName = CleanOptional(DbName),
+            DbUser = CleanOptional(DbUser),
+            DbPassword = DbPassword ?? "",
             SidebarWidth = Clamp(SidebarWidth, MinSidebarWidth, MaxSidebarWidth, 320),
             SourcePanelHeight = Clamp(SourcePanelHeight, MinSourcePanelHeight, MaxSourcePanelHeight, 160),
             DetailsPanelHeight = Clamp(DetailsPanelHeight, MinDetailsPanelHeight, MaxDetailsPanelHeight, 230),
@@ -133,16 +284,30 @@ public sealed record QuestParserUiSettings
         };
     }
 
-    private static string LocationFor(CensusSourceKind kind, CensusSourceOptions census)
+    private static string LocationFor(CensusSourceKind kind, string censusBaseUrl, string censusRemoteBaseUrl, string censusLocalDirectory)
     {
-        return kind == CensusSourceKind.Local
-            ? census.LocalDirectory ?? ""
-            : census.BaseUrl;
+        return kind switch
+        {
+            CensusSourceKind.Daybreak => censusBaseUrl,
+            CensusSourceKind.Remote => censusRemoteBaseUrl,
+            CensusSourceKind.Local => censusLocalDirectory,
+            _ => ""
+        };
     }
 
     private static string Clean(string? value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    private static string CleanOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
+    }
+
+    private static string CleanUrl(string? value, string fallback)
+    {
+        return Clean(value, fallback).TrimEnd('/');
     }
 
     private static double Clamp(double value, double min, double max, double fallback)

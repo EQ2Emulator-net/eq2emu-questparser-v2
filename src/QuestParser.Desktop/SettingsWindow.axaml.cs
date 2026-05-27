@@ -1,4 +1,6 @@
+using System.Globalization;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using QuestParser.Core;
 
@@ -6,14 +8,7 @@ namespace QuestParser.Desktop;
 
 public partial class SettingsWindow : Window
 {
-    private readonly Dictionary<CensusSourceKind, string> _locations = new()
-    {
-        [CensusSourceKind.Daybreak] = QuestParserUiSettings.DefaultLocationFor(CensusSourceKind.Daybreak),
-        [CensusSourceKind.Remote] = QuestParserUiSettings.DefaultLocationFor(CensusSourceKind.Remote),
-        [CensusSourceKind.Local] = QuestParserUiSettings.DefaultLocationFor(CensusSourceKind.Local)
-    };
-
-    private CensusSourceKind _selectedSource;
+    private bool _testingDatabase;
 
     public SettingsWindow()
         : this(QuestParserUiSettings.Load())
@@ -28,8 +23,12 @@ public partial class SettingsWindow : Window
         ApplySettingsToControls(settings.Normalize());
 
         BrowseContentRootButton.Click += async (_, _) => await BrowseFolderIntoAsync(ContentRootBox, "Choose EQ2Emu content root");
-        BrowseSourceButton.Click += async (_, _) => await BrowseFolderIntoAsync(SourceLocationBox, "Choose downloaded Census JSON folder");
-        CensusSourceBox.SelectionChanged += (_, _) => SourceChanged();
+        BrowseCensusCacheButton.Click += async (_, _) => await BrowseFolderIntoAsync(CensusCacheDirectoryBox, "Choose Census cache folder");
+        BrowseLocalCensusButton.Click += async (_, _) => await BrowseFolderIntoAsync(CensusLocalDirectoryBox, "Choose downloaded Census JSON folder");
+        CensusSourceBox.SelectionChanged += (_, _) => UpdateSourceVisibility();
+        UseDatabaseConnectionBox.PropertyChanged += (_, _) => UpdateDatabaseVisibility();
+        UseDbConnectionStringBox.PropertyChanged += (_, _) => UpdateDatabaseVisibility();
+        TestDbConnectionButton.Click += async (_, _) => await TestDatabaseConnectionAsync();
         SidebarWidthSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         SourcePanelHeightSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         DetailsPanelHeightSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
@@ -41,18 +40,29 @@ public partial class SettingsWindow : Window
         SaveButton.Click += (_, _) => Save();
         CancelButton.Click += (_, _) => Close(null);
 
-        UpdateSourceHelp();
+        UpdateSourceVisibility();
+        UpdateDatabaseVisibility();
         UpdateSliderLabels();
     }
 
     private void ApplySettingsToControls(QuestParserUiSettings settings)
     {
-        _selectedSource = settings.SourceKind;
-        _locations[settings.SourceKind] = settings.SourceLocation;
-
         ContentRootBox.Text = settings.ContentRoot;
         CensusSourceBox.SelectedItem = settings.SourceKind;
-        SourceLocationBox.Text = settings.SourceLocation;
+        CensusServiceIdBox.Text = settings.CensusServiceId;
+        CensusBaseUrlBox.Text = settings.CensusBaseUrl;
+        CensusRemoteBaseUrlBox.Text = settings.CensusRemoteBaseUrl;
+        CensusIncludeServiceIdBox.IsChecked = settings.CensusIncludeServiceId;
+        CensusLocalDirectoryBox.Text = settings.CensusLocalDirectory;
+        CensusCacheDirectoryBox.Text = settings.CensusCacheDirectory;
+        UseDatabaseConnectionBox.IsChecked = settings.UseDatabaseConnection;
+        UseDbConnectionStringBox.IsChecked = settings.UseDbConnectionString;
+        DbConnectionStringBox.Text = settings.DbConnectionString;
+        DbHostBox.Text = settings.DbHost;
+        DbPortBox.Text = settings.DbPort.ToString(CultureInfo.InvariantCulture);
+        DbNameBox.Text = settings.DbName;
+        DbUserBox.Text = settings.DbUser;
+        DbPasswordBox.Text = settings.DbPassword;
         ShowQuestSourceBox.IsChecked = settings.ShowQuestSourcePanel;
         ShowSettingsSummaryBox.IsChecked = settings.ShowSettingsSummary;
         ShowVerificationStepsBox.IsChecked = settings.ShowVerificationSteps;
@@ -68,23 +78,33 @@ public partial class SettingsWindow : Window
         SectionTitleTextSizeSlider.Value = settings.SectionTitleTextSize;
     }
 
-    private void SourceChanged()
-    {
-        _locations[_selectedSource] = (SourceLocationBox.Text ?? "").Trim();
-        _selectedSource = CurrentSource();
-        SourceLocationBox.Text = _locations.TryGetValue(_selectedSource, out var location)
-            ? location
-            : QuestParserUiSettings.DefaultLocationFor(_selectedSource);
-        UpdateSourceHelp();
-    }
-
     private void Save()
     {
-        var settings = new QuestParserUiSettings(
-            Clean(ContentRootBox.Text, Defaults.ContentRoot),
-            CurrentSource(),
-            (SourceLocationBox.Text ?? "").Trim())
+        Close(BuildSettingsFromControls());
+    }
+
+    private QuestParserUiSettings BuildSettingsFromControls()
+    {
+        var source = CurrentSource();
+        return new QuestParserUiSettings
         {
+            ContentRoot = Clean(ContentRootBox.Text, Defaults.ContentRoot),
+            SourceKind = source,
+            SourceLocation = CurrentSourceLocation(source),
+            CensusServiceId = Clean(CensusServiceIdBox.Text, Defaults.CensusServiceId),
+            CensusBaseUrl = Clean(CensusBaseUrlBox.Text, Defaults.CensusBaseUrl),
+            CensusRemoteBaseUrl = Clean(CensusRemoteBaseUrlBox.Text, Defaults.CensusRemoteBaseUrl),
+            CensusIncludeServiceId = IsChecked(CensusIncludeServiceIdBox),
+            CensusLocalDirectory = CleanOptional(CensusLocalDirectoryBox.Text),
+            CensusCacheDirectory = Clean(CensusCacheDirectoryBox.Text, Defaults.CensusCacheDirectory),
+            UseDatabaseConnection = IsChecked(UseDatabaseConnectionBox),
+            UseDbConnectionString = IsChecked(UseDbConnectionStringBox),
+            DbConnectionString = CleanOptional(DbConnectionStringBox.Text),
+            DbHost = CleanOptional(DbHostBox.Text),
+            DbPort = ReadDbPort(),
+            DbName = CleanOptional(DbNameBox.Text),
+            DbUser = CleanOptional(DbUserBox.Text),
+            DbPassword = DbPasswordBox.Text ?? "",
             ShowQuestSourcePanel = IsChecked(ShowQuestSourceBox),
             ShowSettingsSummary = IsChecked(ShowSettingsSummaryBox),
             ShowVerificationSteps = IsChecked(ShowVerificationStepsBox),
@@ -99,29 +119,90 @@ public partial class SettingsWindow : Window
             DataTextSize = DataTextSizeSlider.Value,
             SectionTitleTextSize = SectionTitleTextSizeSlider.Value
         }.Normalize();
-
-        Close(settings);
     }
 
-    private void UpdateSourceHelp()
+    private async Task TestDatabaseConnectionAsync()
+    {
+        if (_testingDatabase)
+            return;
+
+        var settings = BuildSettingsFromControls();
+        if (!settings.UseDatabaseConnection)
+        {
+            SetDbTestStatus("Database resolution is disabled.", "#334155");
+            return;
+        }
+
+        if (!settings.HasDatabaseConfiguration())
+        {
+            SetDbTestStatus("Database settings are incomplete.", "#9A3412");
+            return;
+        }
+
+        _testingDatabase = true;
+        UpdateDatabaseVisibility();
+        SetDbTestStatus("Testing connection...", "#334155");
+
+        try
+        {
+            await MariaDbQuestDatabaseResolver.TestConnectionAsync(settings.BuildDatabaseConnectionString());
+            SetDbTestStatus("Connection succeeded.", "#166534");
+        }
+        catch (Exception ex)
+        {
+            SetDbTestStatus($"Connection failed: {ex.Message}", "#991B1B");
+        }
+        finally
+        {
+            _testingDatabase = false;
+            UpdateDatabaseVisibility();
+        }
+    }
+
+    private void UpdateSourceVisibility()
     {
         var source = CurrentSource();
-        BrowseSourceButton.IsEnabled = source == CensusSourceKind.Local;
-        SourceLocationBox.PlaceholderText = source == CensusSourceKind.Local
-            ? "Folder containing downloaded Census JSON"
-            : "Census-compatible base URL";
+        var remoteOrDaybreak = source is CensusSourceKind.Daybreak or CensusSourceKind.Remote;
+
+        CensusServicePanel.IsVisible = remoteOrDaybreak;
+        DaybreakCensusPanel.IsVisible = source == CensusSourceKind.Daybreak;
+        RemoteCensusPanel.IsVisible = source == CensusSourceKind.Remote;
+        LocalCensusPanel.IsVisible = source == CensusSourceKind.Local;
+
         SourceHelpText.Text = source switch
         {
-            CensusSourceKind.Daybreak => "Uses the official Daybreak-compatible Census endpoint.",
-            CensusSourceKind.Remote => "Uses a hosted mirror with the same request and response shape as Daybreak Census.",
-            CensusSourceKind.Local => "Reads already-downloaded Census-compatible quest and questgiver JSON from this folder.",
+            CensusSourceKind.Daybreak => "Uses the official Daybreak-compatible Census endpoint, service ID, and configured raw JSON cache.",
+            CensusSourceKind.Remote => "Uses a hosted Census mirror. Disable service ID when the mirror does not include a /s:... path segment.",
+            CensusSourceKind.Local => "Reads already-downloaded Census-compatible quest and questgiver JSON from the configured folder.",
             _ => ""
         };
+    }
+
+    private void UpdateDatabaseVisibility()
+    {
+        var enabled = IsChecked(UseDatabaseConnectionBox);
+        var useConnectionString = IsChecked(UseDbConnectionStringBox);
+
+        DatabaseSettingsPanel.IsVisible = enabled;
+        DbConnectionStringPanel.IsVisible = enabled && useConnectionString;
+        DbIndividualSettingsPanel.IsVisible = enabled && !useConnectionString;
+        TestDbConnectionButton.IsEnabled = enabled && !_testingDatabase;
     }
 
     private CensusSourceKind CurrentSource()
     {
         return CensusSourceBox.SelectedItem is CensusSourceKind kind ? kind : CensusSourceKind.Daybreak;
+    }
+
+    private string CurrentSourceLocation(CensusSourceKind source)
+    {
+        return source switch
+        {
+            CensusSourceKind.Daybreak => Clean(CensusBaseUrlBox.Text, Defaults.CensusBaseUrl),
+            CensusSourceKind.Remote => Clean(CensusRemoteBaseUrlBox.Text, Defaults.CensusRemoteBaseUrl),
+            CensusSourceKind.Local => CleanOptional(CensusLocalDirectoryBox.Text),
+            _ => ""
+        };
     }
 
     private async Task BrowseFolderIntoAsync(TextBox target, string title)
@@ -169,6 +250,19 @@ public partial class SettingsWindow : Window
         SectionTitleTextSizeValueText.Text = $"{Math.Round(SectionTitleTextSizeSlider.Value):0}px";
     }
 
+    private void SetDbTestStatus(string text, string color)
+    {
+        DbTestStatusText.Text = text;
+        DbTestStatusText.Foreground = Brush.Parse(color);
+    }
+
+    private uint ReadDbPort()
+    {
+        return uint.TryParse(DbPortBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port > 0
+            ? port
+            : Defaults.DefaultDbPort;
+    }
+
     private static bool IsChecked(CheckBox checkBox)
     {
         return checkBox.IsChecked == true;
@@ -177,5 +271,10 @@ public partial class SettingsWindow : Window
     private static string Clean(string? value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    private static string CleanOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
     }
 }

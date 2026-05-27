@@ -2,10 +2,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="QuestParser.Desktop.SettingsWindow"
         Title="QuestParser Settings"
-        Width="760"
-        Height="640"
-        MinWidth="640"
-        MinHeight="520"
+        Width="820"
+        Height="760"
+        MinWidth="700"
+        MinHeight="600"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         FontFamily="Inter, Segoe UI, sans-serif"
@@ -15,26 +15,101 @@
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel Spacing="12">
                 <GroupBox Header="Paths and Quest Source" Padding="12">
-                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Content root" VerticalAlignment="Center" />
-                        <DockPanel Grid.Row="0" Grid.Column="1">
-                            <Button Name="BrowseContentRootButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
-                            <TextBox Name="ContentRootBox" PlaceholderText="EQ2Emu content root" />
-                        </DockPanel>
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Content root" VerticalAlignment="Center" />
+                            <DockPanel Grid.Row="0" Grid.Column="1">
+                                <Button Name="BrowseContentRootButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
+                                <TextBox Name="ContentRootBox" PlaceholderText="EQ2Emu content root" />
+                            </DockPanel>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Quest source" VerticalAlignment="Center" />
-                        <ComboBox Grid.Row="1" Grid.Column="1" Name="CensusSourceBox" Width="190" HorizontalAlignment="Left" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Quest source" VerticalAlignment="Center" />
+                            <ComboBox Grid.Row="1" Grid.Column="1" Name="CensusSourceBox" Width="190" HorizontalAlignment="Left" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Source URL/folder" VerticalAlignment="Center" />
-                        <DockPanel Grid.Row="2" Grid.Column="1">
-                            <Button Name="BrowseSourceButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
-                            <TextBox Name="SourceLocationBox" PlaceholderText="Census URL or local JSON folder" />
-                        </DockPanel>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Census cache folder" VerticalAlignment="Center" />
+                            <DockPanel Grid.Row="2" Grid.Column="1">
+                                <Button Name="BrowseCensusCacheButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
+                                <TextBox Name="CensusCacheDirectoryBox" PlaceholderText="Raw quest/questgiver JSON cache folder" />
+                            </DockPanel>
 
-                        <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Classes="status-strip">
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Name="CensusServicePanel" Spacing="10">
+                                <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Census service ID" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Name="CensusServiceIdBox" PlaceholderText="s:example" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Include service ID" VerticalAlignment="Center" />
+                                    <CheckBox Grid.Row="1" Grid.Column="1" Name="CensusIncludeServiceIdBox" Content="Add the /s:... segment to Census requests" />
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Name="DaybreakCensusPanel" Spacing="10">
+                            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto" ColumnSpacing="12">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Daybreak base URL" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="0" Grid.Column="1" Name="CensusBaseUrlBox" PlaceholderText="https://census.daybreakgames.com" />
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Name="RemoteCensusPanel" Spacing="10">
+                            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto" ColumnSpacing="12">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Remote mirror URL" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="0" Grid.Column="1" Name="CensusRemoteBaseUrlBox" PlaceholderText="https://your-census-mirror.example" />
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Name="LocalCensusPanel" Spacing="10">
+                            <Grid ColumnDefinitions="170,*" RowDefinitions="Auto" ColumnSpacing="12">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Local JSON folder" VerticalAlignment="Center" />
+                                <DockPanel Grid.Row="0" Grid.Column="1">
+                                    <Button Name="BrowseLocalCensusButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="88" Margin="8,0,0,0" />
+                                    <TextBox Name="CensusLocalDirectoryBox" PlaceholderText="Folder containing downloaded Census JSON" />
+                                </DockPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <Border Classes="status-strip">
                             <TextBlock Name="SourceHelpText" Foreground="#334155" TextWrapping="Wrap" />
                         </Border>
-                    </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Database Resolution" Padding="12">
+                    <StackPanel Spacing="10">
+                        <CheckBox Name="UseDatabaseConnectionBox" Content="Use MariaDB for automatic quest, NPC, item, spell, faction, race, and zone ID resolution" />
+
+                        <StackPanel Name="DatabaseSettingsPanel" Spacing="10">
+                            <CheckBox Name="UseDbConnectionStringBox" Content="Use a full MariaDB connection string" />
+
+                            <StackPanel Name="DbConnectionStringPanel" Spacing="8">
+                                <Grid ColumnDefinitions="170,*" RowDefinitions="Auto" ColumnSpacing="12">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Connection string" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Name="DbConnectionStringBox" PlaceholderText="Server=127.0.0.1;Port=3306;Database=eq2emu;User ID=eq2emu;Password=..." />
+                                </Grid>
+                            </StackPanel>
+
+                            <Grid Name="DbIndividualSettingsPanel" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="10">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Host" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="0" Grid.Column="1" Name="DbHostBox" PlaceholderText="127.0.0.1" />
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Port" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="1" Grid.Column="1" Name="DbPortBox" PlaceholderText="3306" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Database" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="2" Grid.Column="1" Name="DbNameBox" PlaceholderText="eq2emu" />
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="User" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="3" Grid.Column="1" Name="DbUserBox" PlaceholderText="eq2emu" />
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Password" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="4" Grid.Column="1" Name="DbPasswordBox" PasswordChar="*" />
+                            </Grid>
+
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <Button Grid.Column="0" Name="TestDbConnectionButton" Content="Test Connection" MinWidth="128" />
+                                <TextBlock Grid.Column="1" Name="DbTestStatusText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#334155" />
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
                 </GroupBox>
 
                 <GroupBox Header="Layout and Visibility" Padding="12">

@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuestParser.Tests", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuestParser.WinForms", "src\QuestParser.WinForms\QuestParser.WinForms.csproj", "{2CA0152A-3247-4E85-9F86-0C5A318BE573}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuestParser.Desktop", "src\QuestParser.Desktop\QuestParser.Desktop.csproj", "{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,6 +75,18 @@ Global
 		{2CA0152A-3247-4E85-9F86-0C5A318BE573}.Release|x64.Build.0 = Release|Any CPU
 		{2CA0152A-3247-4E85-9F86-0C5A318BE573}.Release|x86.ActiveCfg = Release|Any CPU
 		{2CA0152A-3247-4E85-9F86-0C5A318BE573}.Release|x86.Build.0 = Release|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Debug|x64.Build.0 = Debug|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Debug|x86.Build.0 = Debug|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Release|x64.ActiveCfg = Release|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Release|x64.Build.0 = Release|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Release|x86.ActiveCfg = Release|Any CPU
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,5 +96,6 @@ Global
 		{02635091-DA23-48D4-BFCD-F4BE353776D0} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{1F2E2475-906B-400F-9358-3932A45C7122} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{2CA0152A-3247-4E85-9F86-0C5A318BE573} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{0ED35F52-14B4-4FDB-9E3A-6A92C566347E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

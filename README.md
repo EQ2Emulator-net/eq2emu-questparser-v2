@@ -9,7 +9,8 @@ Dependencies:
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
 - Network access to Daybreak Census for quest imports
 - Optional: MariaDB/MySQL access to an EQ2Emu world database for automatic ID resolution
-- Optional: Windows desktop runtime for the WinForms UI. The CLI can run anywhere .NET 9 is supported.
+- Optional: Windows desktop runtime for the legacy WinForms UI
+- Linux desktop runs require a normal graphical session, such as X11 or Wayland
 
 Setup:
 
@@ -20,7 +21,13 @@ dotnet restore
 dotnet build
 ```
 
-Run the UI on Windows:
+Run the cross-platform desktop UI:
+
+```powershell
+dotnet run --project src\QuestParser.Desktop
+```
+
+Run the legacy WinForms UI on Windows:
 
 ```powershell
 dotnet run --project src\QuestParser.WinForms
@@ -68,10 +75,14 @@ $env:EQ2QP_DB_PASSWORD = "<password>"
 UI:
 
 ```powershell
+dotnet run --project src\QuestParser.Desktop
 dotnet run --project src\QuestParser.WinForms
 ```
 
-The UI fetches a quest by name, resolves DB references, then shows the imported Census data, DB candidates,
+`QuestParser.Desktop` is the Avalonia UI for Windows, macOS, and Linux. It imports or creates quests,
+previews generated Lua/SQL/missing reports/spec JSON, and can generate files.
+
+`QuestParser.WinForms` is the older Windows-only UI. It fetches a quest by name, resolves DB references, then shows the imported Census data, DB candidates,
 editable quest/spec fields, generated Lua, review SQL, missing-data report, and raw cached Census JSON.
 Each generated section must be manually verified before files can be written. Existing Lua files are still
 protected unless `Overwrite Lua` is checked.
@@ -111,4 +122,14 @@ Static quest rewards are emitted as `quest_details` SQL rows instead of Lua rewa
 ```powershell
 dotnet build
 dotnet test
+```
+
+## Publish
+
+Framework-dependent desktop builds:
+
+```powershell
+dotnet publish src\QuestParser.Desktop -c Release -r win-x64 --self-contained false
+dotnet publish src\QuestParser.Desktop -c Release -r linux-x64 --self-contained false
+dotnet publish src\QuestParser.Desktop -c Release -r osx-arm64 --self-contained false
 ```

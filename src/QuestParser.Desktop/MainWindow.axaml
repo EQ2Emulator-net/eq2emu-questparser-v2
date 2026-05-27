@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="860"
+        x:Class="QuestParser.Desktop.MainWindow"
+        Title="EQ2Emu QuestParser"
+        Width="1280"
+        Height="860"
+        MinWidth="980"
+        MinHeight="680">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="12" RowSpacing="10">
+        <Border Grid.Row="0" Background="#20242b" Padding="14" CornerRadius="6">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="4">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="EQ2Emu QuestParser" FontSize="22" FontWeight="SemiBold" Foreground="#f3f4f6" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Cross-platform quest import, preview, and generation" Foreground="#cbd5e1" />
+                <TextBlock Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Name="StatusText" Text="Ready" Foreground="#cbd5e1" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="2*,*,2*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Quest name" />
+            <TextBox Grid.Row="1" Grid.Column="0" Name="QuestNameBox" PlaceholderText="A Hunter's Tool" />
+
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="Author" />
+            <TextBox Grid.Row="1" Grid.Column="1" Name="AuthorBox" PlaceholderText="Your Name" />
+
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="Content root" />
+            <TextBox Grid.Row="1" Grid.Column="2" Name="ContentRootBox" />
+
+            <CheckBox Grid.Row="1" Grid.Column="3" Name="OverwriteBox" Content="Overwrite Lua" VerticalAlignment="Center" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Spec path" VerticalAlignment="Center" />
+            <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Name="SpecPathBox" PlaceholderText="Path to .quest.json" />
+            <StackPanel Grid.Row="2" Grid.Column="3" Orientation="Horizontal" Spacing="8">
+                <Button Name="ImportButton" Content="Import" MinWidth="84" />
+                <Button Name="CreateButton" Content="Create" MinWidth="84" />
+                <Button Name="PreviewButton" Content="Preview Spec" MinWidth="104" />
+                <Button Name="GenerateButton" Content="Generate" MinWidth="92" />
+            </StackPanel>
+        </Grid>
+
+        <TabControl Grid.Row="2">
+            <TabItem Header="Lua">
+                <TextBox Name="LuaBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" />
+            </TabItem>
+            <TabItem Header="SQL">
+                <TextBox Name="SqlBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" />
+            </TabItem>
+            <TabItem Header="Missing Report">
+                <TextBox Name="MissingBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" />
+            </TabItem>
+            <TabItem Header="Spec">
+                <TextBox Name="SpecBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" />
+            </TabItem>
+            <TabItem Header="Log">
+                <TextBox Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" />
+            </TabItem>
+        </TabControl>
+
+        <TextBlock Grid.Row="3" Text="Tip: MariaDB is optional. Without DB configuration, generated files include TODOs for unresolved IDs." Foreground="#64748b" />
+    </Grid>
+</Window>

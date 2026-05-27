@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using QuestParser.Core;
@@ -310,8 +311,14 @@ public partial class MainWindow : Window
         var settings = _settings.Normalize();
 
         FontSize = settings.TextSize;
+        MainTabs.FontSize = settings.TabTextSize;
+        SectionDetailsTabs.FontSize = settings.TabTextSize;
+        GeneratedTabs.FontSize = settings.TabTextSize;
+        SectionTitleText.FontSize = settings.SectionTitleTextSize;
+        ApplyDataTextSize(settings.DataTextSize);
+
         QuestSourceGroup.IsVisible = settings.ShowQuestSourcePanel;
-        SettingsSummaryText.IsVisible = settings.ShowSettingsSummary;
+        SettingsSummaryStrip.IsVisible = settings.ShowSettingsSummary;
         VerificationGroup.IsVisible = settings.ShowVerificationSteps;
         VerificationSplitter.IsVisible = settings.ShowVerificationSteps;
         WorkGrid.ColumnDefinitions[0].Width = settings.ShowVerificationSteps
@@ -322,14 +329,32 @@ public partial class MainWindow : Window
             : new GridLength(0);
 
         SourceDataGroup.IsVisible = settings.ShowSourceDataPanel;
-        ReviewLayout.RowDefinitions[1].Height = settings.ShowSourceDataPanel
-            ? new GridLength(settings.SourcePanelHeight)
-            : new GridLength(0);
+        SourceDataGroup.Height = settings.SourcePanelHeight;
         SectionDetailsTabs.IsVisible = settings.ShowCandidatePanel;
-        ReviewLayout.RowDefinitions[3].Height = settings.ShowCandidatePanel
-            ? new GridLength(settings.DetailsPanelHeight)
-            : new GridLength(0);
+        SectionDetailsTabs.Height = settings.DetailsPanelHeight;
         ProgressGroup.IsVisible = settings.ShowProgressPanel;
+    }
+
+    private void ApplyDataTextSize(double dataTextSize)
+    {
+        foreach (var control in new TemplatedControl[]
+        {
+            SourceList,
+            CandidateList,
+            DiagnosticsList,
+            SectionLuaBox,
+            MissingSpawnBox,
+            LuaPreviewBox,
+            SqlPreviewBox,
+            MissingPreviewBox,
+            SpecPreviewBox,
+            CensusQuestBox,
+            CensusGiverBox,
+            LogBox
+        })
+        {
+            control.FontSize = dataTextSize;
+        }
     }
 
     private async Task LoadRawCensusTabsAsync(string questName)

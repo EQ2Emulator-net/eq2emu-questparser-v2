@@ -34,6 +34,9 @@ public partial class SettingsWindow : Window
         SourcePanelHeightSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         DetailsPanelHeightSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         TextSizeSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
+        TabTextSizeSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
+        DataTextSizeSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
+        SectionTitleTextSizeSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         ResetLayoutButton.Click += (_, _) => ResetLayout();
         SaveButton.Click += (_, _) => Save();
         CancelButton.Click += (_, _) => Close(null);
@@ -60,6 +63,9 @@ public partial class SettingsWindow : Window
         SourcePanelHeightSlider.Value = settings.SourcePanelHeight;
         DetailsPanelHeightSlider.Value = settings.DetailsPanelHeight;
         TextSizeSlider.Value = settings.TextSize;
+        TabTextSizeSlider.Value = settings.TabTextSize;
+        DataTextSizeSlider.Value = settings.DataTextSize;
+        SectionTitleTextSizeSlider.Value = settings.SectionTitleTextSize;
     }
 
     private void SourceChanged()
@@ -88,7 +94,10 @@ public partial class SettingsWindow : Window
             SidebarWidth = SidebarWidthSlider.Value,
             SourcePanelHeight = SourcePanelHeightSlider.Value,
             DetailsPanelHeight = DetailsPanelHeightSlider.Value,
-            TextSize = TextSizeSlider.Value
+            TextSize = TextSizeSlider.Value,
+            TabTextSize = TabTextSizeSlider.Value,
+            DataTextSize = DataTextSizeSlider.Value,
+            SectionTitleTextSize = SectionTitleTextSizeSlider.Value
         }.Normalize();
 
         Close(settings);
@@ -143,6 +152,9 @@ public partial class SettingsWindow : Window
         SourcePanelHeightSlider.Value = 160;
         DetailsPanelHeightSlider.Value = 230;
         TextSizeSlider.Value = 13;
+        TabTextSizeSlider.Value = 13;
+        DataTextSizeSlider.Value = 12;
+        SectionTitleTextSizeSlider.Value = 16;
         UpdateSliderLabels();
     }
 
@@ -152,6 +164,9 @@ public partial class SettingsWindow : Window
         SourcePanelHeightValueText.Text = $"{Math.Round(SourcePanelHeightSlider.Value):0}px";
         DetailsPanelHeightValueText.Text = $"{Math.Round(DetailsPanelHeightSlider.Value):0}px";
         TextSizeValueText.Text = $"{Math.Round(TextSizeSlider.Value):0}px";
+        TabTextSizeValueText.Text = $"{Math.Round(TabTextSizeSlider.Value):0}px";
+        DataTextSizeValueText.Text = $"{Math.Round(DataTextSizeSlider.Value):0}px";
+        SectionTitleTextSizeValueText.Text = $"{Math.Round(SectionTitleTextSizeSlider.Value):0}px";
     }
 
     private static bool IsChecked(CheckBox checkBox)

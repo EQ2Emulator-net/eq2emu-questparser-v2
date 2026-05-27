@@ -14,6 +14,12 @@ public sealed record QuestParserUiSettings
     public const double MaxDetailsPanelHeight = 380;
     public const double MinTextSize = 12;
     public const double MaxTextSize = 18;
+    public const double MinTabTextSize = 12;
+    public const double MaxTabTextSize = 18;
+    public const double MinDataTextSize = 11;
+    public const double MaxDataTextSize = 18;
+    public const double MinSectionTitleTextSize = 14;
+    public const double MaxSectionTitleTextSize = 22;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -37,6 +43,9 @@ public sealed record QuestParserUiSettings
     public double SourcePanelHeight { get; init; } = 160;
     public double DetailsPanelHeight { get; init; } = 230;
     public double TextSize { get; init; } = 13;
+    public double TabTextSize { get; init; } = 13;
+    public double DataTextSize { get; init; } = 12;
+    public double SectionTitleTextSize { get; init; } = 16;
 
     public QuestParserUiSettings()
     {
@@ -109,7 +118,10 @@ public sealed record QuestParserUiSettings
             SidebarWidth = Clamp(SidebarWidth, MinSidebarWidth, MaxSidebarWidth, 320),
             SourcePanelHeight = Clamp(SourcePanelHeight, MinSourcePanelHeight, MaxSourcePanelHeight, 160),
             DetailsPanelHeight = Clamp(DetailsPanelHeight, MinDetailsPanelHeight, MaxDetailsPanelHeight, 230),
-            TextSize = Clamp(TextSize, MinTextSize, MaxTextSize, 13)
+            TextSize = Clamp(TextSize, MinTextSize, MaxTextSize, 13),
+            TabTextSize = Clamp(TabTextSize, MinTabTextSize, MaxTabTextSize, 13),
+            DataTextSize = Clamp(DataTextSize, MinDataTextSize, MaxDataTextSize, 12),
+            SectionTitleTextSize = Clamp(SectionTitleTextSize, MinSectionTitleTextSize, MaxSectionTitleTextSize, 16)
         };
     }
 

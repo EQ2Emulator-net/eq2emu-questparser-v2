@@ -2,6 +2,12 @@
 
 Fresh .NET 9 quest authoring tool for EQ2Emu.
 
+## Screenshots
+<img width="1920" height="1040" alt="image" src="https://github.com/user-attachments/assets/9b1823fe-b5c9-48ac-8997-8f19d6947034" />
+<img width="1920" height="1040" alt="image" src="https://github.com/user-attachments/assets/86d4f042-fbd1-48a1-ab60-954ecfe24dea" />
+<img width="1920" height="1040" alt="image" src="https://github.com/user-attachments/assets/8c269517-f1c8-4655-a146-aa477d6e6afa" />
+
+
 ## Install
 
 Build dependencies:

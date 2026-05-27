@@ -12,7 +12,7 @@
         Background="#F3F3F3">
     <Grid RowDefinitions="Auto,*,Auto" Margin="8" RowSpacing="8">
         <GroupBox Grid.Row="0" Header="Quest Source" Padding="8">
-            <Grid ColumnDefinitions="86,2*,60,*,84,2*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+            <Grid ColumnDefinitions="86,2*,60,*,84,2*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Quest name" VerticalAlignment="Center" />
                 <TextBox Grid.Row="0" Grid.Column="1" Name="QuestNameBox" />
 
@@ -38,7 +38,15 @@
                     <Button Name="FetchButton" Content="Fetch + Resolve" MinWidth="120" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="7"
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Data source" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="2" Grid.Column="1" Name="CensusSourceBox" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Text="Source URL or local JSON folder" VerticalAlignment="Center" />
+                <DockPanel Grid.Row="2" Grid.Column="5">
+                    <Button Name="BrowseCensusSourceButton" Content="Browse..." DockPanel.Dock="Right" MinWidth="84" Margin="6,0,0,0" />
+                    <TextBox Name="CensusLocationBox" />
+                </DockPanel>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="7"
                            Name="DbConfigText"
                            Foreground="#666666"
                            Text="MariaDB is optional. Without DB configuration, unresolved references remain as review TODOs." />
@@ -62,7 +70,7 @@
                             </StackPanel>
                         </Border>
 
-                        <GroupBox Grid.Row="1" Header="Census and DB Data Used by This Section" Padding="6">
+                        <GroupBox Grid.Row="1" Header="Quest Source and DB Data Used by This Section" Padding="6">
                             <ListBox Name="SourceList" FontFamily="Consolas,Menlo,monospace" />
                         </GroupBox>
 
@@ -120,10 +128,10 @@
                         <TabItem Header="Spec JSON">
                             <TextBox Name="SpecPreviewBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
-                        <TabItem Header="Census Quest JSON">
+                        <TabItem Header="Quest Source JSON">
                             <TextBox Name="CensusQuestBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
-                        <TabItem Header="Census Questgiver JSON">
+                        <TabItem Header="Questgiver Source JSON">
                             <TextBox Name="CensusGiverBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,Menlo,monospace" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                     </TabControl>

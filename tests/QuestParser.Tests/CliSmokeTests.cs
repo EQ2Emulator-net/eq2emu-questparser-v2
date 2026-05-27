@@ -37,6 +37,40 @@ public sealed class CliSmokeTests
         }
     }
 
+    [Fact]
+    public async Task ImportCommandCanUseLocalCensusJsonDirectory()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-cli-local-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(tempRoot, "source");
+        var cache = Path.Combine(tempRoot, "cache");
+        var contentRoot = Path.Combine(tempRoot, "content");
+        Directory.CreateDirectory(source);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(source, CensusClient.QuestJsonFileName("A Hunter's Tool")), QuestParserCoreTests.SampleQuestJson());
+            await File.WriteAllTextAsync(Path.Combine(source, CensusClient.QuestGiverJsonFileName("A Hunter's Tool")), QuestParserCoreTests.SampleQuestGiverJson());
+
+            var exitCode = await ProgramMain.RunAsync([
+                "import",
+                "--quest", "A Hunter's Tool",
+                "--author", "Tester",
+                "--content-root", contentRoot,
+                "--census-source", "local",
+                "--census-local-dir", source,
+                "--census-cache-dir", cache
+            ]);
+
+            Assert.Equal(0, exitCode);
+            Assert.True(File.Exists(Path.Combine(contentRoot, "Quests", "Commonlands", "a_hunters_tool.quest.json")));
+            Assert.True(File.Exists(Path.Combine(cache, CensusClient.QuestJsonFileName("A Hunter's Tool"))));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
     private sealed class FixtureHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

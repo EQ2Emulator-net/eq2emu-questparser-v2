@@ -20,6 +20,43 @@ public sealed class QuestParserCoreTests
         Assert.Equal("J.P. Feterman", givers.QuestGiverList[0].Name);
     }
 
+    [Fact]
+    public void CensusClientCanBuildRemoteMirrorUrlsWithoutServiceIdPath()
+    {
+        var uri = CensusClient.BuildQuestUri("A Hunter's Tool", "https://mirror.example", includeServiceId: false);
+
+        Assert.Equal("/get/eq2/quest", uri.AbsolutePath);
+        Assert.Equal("mirror.example", uri.Host);
+        Assert.DoesNotContain("s:example", uri.ToString());
+        Assert.Contains("name=A+Hunter%27s+Tool", uri.Query);
+    }
+
+    [Fact]
+    public async Task LocalCensusClientReadsDownloadedJsonAndCachesRawPayloads()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-local-census-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(tempRoot, "source");
+        var cache = Path.Combine(tempRoot, "cache");
+        Directory.CreateDirectory(source);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(source, CensusClient.QuestJsonFileName("A Hunter's Tool")), SampleQuestJson());
+            await File.WriteAllTextAsync(Path.Combine(source, CensusClient.QuestGiverJsonFileName("A Hunter's Tool")), SampleQuestGiverJson());
+
+            var import = await new LocalCensusClient(source, cache).FetchQuestAsync("A Hunter's Tool");
+
+            Assert.Equal("A Hunter's Tool", import.Quest.Name);
+            Assert.Equal(["J.P. Feterman"], import.QuestGivers.Select(giver => giver.Name).ToArray());
+            Assert.True(File.Exists(Path.Combine(cache, CensusClient.QuestJsonFileName("A Hunter's Tool"))));
+            Assert.True(File.Exists(Path.Combine(cache, CensusClient.QuestGiverJsonFileName("A Hunter's Tool"))));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("I need to return to J.P. Feterman", StepType.Chat)]
     [InlineData("I must kill five sandstone giants", StepType.Kill)]

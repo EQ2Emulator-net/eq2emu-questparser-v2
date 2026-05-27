@@ -12,7 +12,7 @@ public sealed class QuestWorkflow
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private readonly CensusClient _censusClient;
+    private readonly ICensusClient _censusClient;
     private readonly QuestSpecFactory _specFactory;
     private readonly IQuestDatabaseResolver _resolver;
     private readonly LuaGenerator _luaGenerator;
@@ -20,13 +20,13 @@ public sealed class QuestWorkflow
     private readonly QuestTemplateFactory _templateFactory = new();
 
     public QuestWorkflow(
-        CensusClient? censusClient = null,
+        ICensusClient? censusClient = null,
         QuestSpecFactory? specFactory = null,
         IQuestDatabaseResolver? resolver = null,
         LuaGenerator? luaGenerator = null,
         SqlReportGenerator? sqlReportGenerator = null)
     {
-        _censusClient = censusClient ?? new CensusClient();
+        _censusClient = censusClient ?? CensusClientFactory.CreateDefault();
         _specFactory = specFactory ?? new QuestSpecFactory();
         _resolver = resolver ?? QuestDatabaseResolverFactory.CreateDefault();
         _luaGenerator = luaGenerator ?? new LuaGenerator();

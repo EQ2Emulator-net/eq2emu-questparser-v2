@@ -7,7 +7,7 @@ Fresh .NET 9 quest authoring tool for EQ2Emu.
 Dependencies:
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-- Network access to Daybreak Census for quest imports
+- Quest source access: Daybreak Census, a compatible remote mirror, or local downloaded JSON files
 - Optional: MariaDB/MySQL access to an EQ2Emu world database for automatic ID resolution
 - Optional: Windows desktop runtime for the legacy WinForms UI
 - Linux desktop runs require a normal graphical session, such as X11 or Wayland
@@ -41,20 +41,26 @@ dotnet run --project src\QuestParser.Cli -- create --quest "A Hunter's Tool" --a
 
 ## Configuration
 
-The tool is safe to run without MariaDB configured. Census import still works, generated specs and previews are created, and DB-backed IDs are left unresolved with review TODOs. Configure DB access only when you want automatic quest, NPC, item, spell, faction, race, and zone resolution.
+The tool is safe to run without MariaDB configured. Quest-source import still works, generated specs and previews are created, and DB-backed IDs are left unresolved with review TODOs. Configure DB access only when you want automatic quest, NPC, item, spell, faction, race, and zone resolution.
 
 Defaults:
 
+- Quest source: `daybreak`
 - Census service id: `s:example`
-- Census endpoint: `https://census.daybreakgames.com`
+- Daybreak Census endpoint: `https://census.daybreakgames.com`
 - MariaDB: not configured by default
 - Content root: `./eq2emu-content`
 - Runtime cache/output/log folders: the QuestParser executable directory
 
 Optional environment variables:
 
+- `EQ2QP_CENSUS_SOURCE`: `daybreak`, `remote`, or `local`. Defaults to `daybreak`.
 - `EQ2QP_CENSUS_SERVICE_ID`: Census service id, for example `s:example`.
-- `EQ2QP_CENSUS_BASE_URL`: Census endpoint. Defaults to `https://census.daybreakgames.com`.
+- `EQ2QP_CENSUS_BASE_URL`: Daybreak-compatible endpoint. Defaults to `https://census.daybreakgames.com`.
+- `EQ2QP_CENSUS_REMOTE_BASE_URL`: remote mirror endpoint when `EQ2QP_CENSUS_SOURCE=remote`.
+- `EQ2QP_CENSUS_INCLUDE_SERVICE_ID`: set to `false` when a mirror does not use a `/s:...` URL segment.
+- `EQ2QP_CENSUS_LOCAL_DIR`: directory containing downloaded Census-compatible JSON when `EQ2QP_CENSUS_SOURCE=local`.
+- `EQ2QP_CENSUS_CACHE_DIR`: raw quest/questgiver JSON cache directory. Defaults to `cache/census` beside the executable.
 - `EQ2QP_CONTENT_ROOT`: EQ2Emu content root. Defaults to `./eq2emu-content`.
 - `EQ2QP_DB_CONNECTION`: full MariaDB connection string.
 - `EQ2QP_DB_HOST`, `EQ2QP_DB_PORT`, `EQ2QP_DB_NAME`, `EQ2QP_DB_USER`, `EQ2QP_DB_PASSWORD`: individual MariaDB settings used when `EQ2QP_DB_CONNECTION` is not set.
@@ -63,12 +69,35 @@ PowerShell example:
 
 ```powershell
 $env:EQ2QP_CONTENT_ROOT = "C:\path\to\eq2emu-content"
+$env:EQ2QP_CENSUS_SOURCE = "daybreak"
 $env:EQ2QP_CENSUS_SERVICE_ID = "s:example"
 $env:EQ2QP_DB_HOST = "127.0.0.1"
 $env:EQ2QP_DB_NAME = "eq2emu"
 $env:EQ2QP_DB_USER = "eq2emu"
 $env:EQ2QP_DB_PASSWORD = "<password>"
 ```
+
+Remote mirror example:
+
+```powershell
+$env:EQ2QP_CENSUS_SOURCE = "remote"
+$env:EQ2QP_CENSUS_REMOTE_BASE_URL = "https://your-census-mirror.example"
+$env:EQ2QP_CENSUS_INCLUDE_SERVICE_ID = "false"
+```
+
+Local JSON example:
+
+```powershell
+$env:EQ2QP_CENSUS_SOURCE = "local"
+$env:EQ2QP_CENSUS_LOCAL_DIR = "C:\path\to\downloaded-census-json"
+```
+
+Local mode expects Census-compatible response JSON. For a quest named `A Hunter's Tool`, the preferred file names are:
+
+- `a_hunters_tool.quest.json`
+- `a_hunters_tool.questgivers.json`
+
+It also accepts `quest.json`/`quests.json` and `questgiver.json`/`questgivers.json` for single-dataset folders.
 
 ## Commands
 
@@ -80,9 +109,10 @@ dotnet run --project src\QuestParser.WinForms
 ```
 
 `QuestParser.Desktop` is the Avalonia UI for Windows, macOS, and Linux. It imports or creates quests,
-previews generated Lua/SQL/missing reports/spec JSON, and can generate files.
+previews generated Lua/SQL/missing reports/spec JSON, and can generate files. The Quest Source panel can switch
+between Daybreak, a compatible remote mirror, and a local JSON folder before importing.
 
-`QuestParser.WinForms` is the older Windows-only UI. It fetches a quest by name, resolves DB references, then shows the imported Census data, DB candidates,
+`QuestParser.WinForms` is the older Windows-only UI. It fetches a quest by name, resolves DB references, then shows the imported quest-source data, DB candidates,
 editable quest/spec fields, generated Lua, review SQL, missing-data report, and raw cached Census JSON.
 Each generated section must be manually verified before files can be written. Existing Lua files are still
 protected unless `Overwrite Lua` is checked.
@@ -90,7 +120,7 @@ protected unless `Overwrite Lua` is checked.
 Additional UI authoring helpers:
 
 - `Resolve Section` re-runs DB resolution only for the current quest ID, giver, step, or reward section.
-- The review grid includes provenance so values can be traced to Census, DB resolution, generated defaults, templates, or user overrides.
+- The review grid includes provenance so values can be traced to the quest source, DB resolution, generated defaults, templates, or user overrides.
 - Missing NPC references show a Missing Spawn Wizard with suggested spawn script path, Lua TODO text, and commented review-only SQL.
 - The Diagnostics tab lists blockers and warnings. Blockers must be fixed or explicitly acknowledged before generation.
 - `New Template` creates manual drafts for blank, speak-to-NPC, kill, collect-item, harvest, craft, and visit-location quests when Census data is incomplete.
@@ -100,6 +130,7 @@ CLI:
 ```powershell
 dotnet run --project src\QuestParser.Cli -- create --quest "A Hunter's Tool" --author "Your Name"
 dotnet run --project src\QuestParser.Cli -- import --quest "A Hunter's Tool"
+dotnet run --project src\QuestParser.Cli -- import --quest "A Hunter's Tool" --census-source local --census-local-dir ".\downloaded-census-json"
 dotnet run --project src\QuestParser.Cli -- resolve --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
 dotnet run --project src\QuestParser.Cli -- generate --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
 dotnet run --project src\QuestParser.Cli -- lint

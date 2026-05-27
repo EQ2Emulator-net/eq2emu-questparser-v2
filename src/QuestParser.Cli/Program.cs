@@ -16,7 +16,7 @@ public static class ProgramMain
         {
             var command = args[0].ToLowerInvariant();
             var options = ParseOptions(args.Skip(1).ToArray());
-            workflow ??= new QuestWorkflow();
+            workflow ??= CreateWorkflow(options);
 
             switch (command)
             {
@@ -118,6 +118,38 @@ public static class ProgramMain
         return options.ContainsKey(name);
     }
 
+    private static QuestWorkflow CreateWorkflow(Dictionary<string, string?> options)
+    {
+        var censusOptions = CensusSourceOptions.FromEnvironment().WithOverrides(
+            source: Get(options, "census-source", ""),
+            baseUrl: Get(options, "census-base-url", Get(options, "census-remote-base-url", "")),
+            serviceId: Get(options, "census-service-id", ""),
+            includeServiceId: GetNullableBool(options, "census-include-service-id"),
+            localDirectory: Get(options, "census-local-dir", ""),
+            cacheDirectory: Get(options, "census-cache-dir", ""));
+
+        return new QuestWorkflow(censusClient: CensusClientFactory.Create(censusOptions));
+    }
+
+    private static bool? GetNullableBool(Dictionary<string, string?> options, string name)
+    {
+        if (!options.TryGetValue(name, out var value))
+            return null;
+        if (value is null)
+            return true;
+        if (value.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("on", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (value.Equals("0", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("false", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("no", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("off", StringComparison.OrdinalIgnoreCase))
+            return false;
+        throw new ArgumentException($"Invalid boolean value for --{name}: {value}");
+    }
+
     private static void PrintResult(string title, QuestWorkflowResult result)
     {
         Console.WriteLine(title);
@@ -148,7 +180,10 @@ public static class ProgramMain
               questparser lint [--content-root "<path>"]
 
             Defaults:
-              Census service id: s:example, or EQ2QP_CENSUS_SERVICE_ID
+              Census source: daybreak, remote, or local; set EQ2QP_CENSUS_SOURCE or --census-source
+              Census service id: s:example, or EQ2QP_CENSUS_SERVICE_ID / --census-service-id
+              Remote Census base URL: EQ2QP_CENSUS_REMOTE_BASE_URL or --census-base-url
+              Local Census JSON dir: EQ2QP_CENSUS_LOCAL_DIR or --census-local-dir
               DB: optional; set EQ2QP_DB_CONNECTION or EQ2QP_DB_HOST/EQ2QP_DB_NAME/EQ2QP_DB_USER/EQ2QP_DB_PASSWORD
               Content root: ./eq2emu-content, or EQ2QP_CONTENT_ROOT
             """);

@@ -20,7 +20,7 @@ public partial class MainWindow : Window
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private readonly QuestWorkflow _workflow = new();
+    private QuestWorkflow _workflow = new();
     private readonly List<ReviewSection> _sections = [];
     private readonly HashSet<string> _verifiedSections = [];
     private readonly HashSet<string> _dirtyEditorKeys = [];
@@ -46,15 +46,21 @@ public partial class MainWindow : Window
         DiagnosticsList.ItemsSource = _diagnosticRows;
 
         ContentRootBox.Text = Defaults.ContentRoot;
-        DbConfigText.Text = Defaults.HasDatabaseConfiguration
-            ? "MariaDB configuration detected. DB references will be resolved during Fetch + Resolve and Resolve Section."
-            : "MariaDB is not configured. References stay editable and unresolved items are shown as review TODOs.";
+        var censusOptions = CensusSourceOptions.FromEnvironment();
+        CensusSourceBox.ItemsSource = Enum.GetValues<CensusSourceKind>();
+        CensusSourceBox.SelectedItem = censusOptions.Kind;
+        CensusLocationBox.Text = LocationForSource(censusOptions);
+
+        var dbText = Defaults.HasDatabaseConfiguration
+            ? "MariaDB configuration detected."
+            : "MariaDB is not configured; references stay editable and unresolved items are shown as review TODOs.";
+        DbConfigText.Text = $"Quest source: {censusOptions.Kind}. {dbText}";
         TemplateBox.ItemsSource = Enum.GetValues<QuestTemplateKind>().Select(kind => new TemplateChoice(kind)).ToArray();
         TemplateBox.SelectedIndex = 0;
 
         WireActions();
         ClearLoadedQuestState();
-        AppendLog("Ready. Fetch from Census, load an existing spec, or create a manual template.");
+        AppendLog("Ready. Fetch from the configured quest source, load an existing spec, or create a manual template.");
     }
 
     private void WireActions()
@@ -63,6 +69,8 @@ public partial class MainWindow : Window
         NewTemplateButton.Click += (_, _) => RunSync("Create template", CreateTemplateQuest);
         PreviewSpecButton.Click += async (_, _) => await RunAsync("Preview spec", LoadSpecPreviewAsync);
         BrowseContentRootButton.Click += async (_, _) => await BrowseContentRootAsync();
+        BrowseCensusSourceButton.Click += async (_, _) => await BrowseCensusSourceAsync();
+        CensusSourceBox.SelectionChanged += (_, _) => UpdateCensusLocationForSelectedSource();
 
         GenerateButton.Click += async (_, _) => await RunAsync("Generate files", GenerateFilesAsync);
         ResolveSectionButton.Click += async (_, _) => await RunAsync("Resolve section", ResolveCurrentSectionAsync);
@@ -125,15 +133,16 @@ public partial class MainWindow : Window
     private async Task FetchAndResolveAsync()
     {
         var questName = RequiredQuestName();
+        _workflow = CreateWorkflowFromUi();
 
         ClearLoadedQuestState();
-        AppendLog($"Fetching Census quest '{questName}'.");
+        AppendLog($"Fetching quest source data for '{questName}'.");
         var imported = await _workflow.ImportAsync(
             questName,
             CleanPath(ContentRootBox.Text, Defaults.ContentRoot),
             (AuthorBox.Text ?? "").Trim());
 
-        AppendLog($"Census import created spec: {imported.Spec.Output.SpecPath}");
+        AppendLog($"Quest source import created spec: {imported.Spec.Output.SpecPath}");
         AppendLog("Resolving DB references.");
         var resolved = await _workflow.ResolveAsync(imported.Spec.Output.SpecPath);
 
@@ -169,8 +178,8 @@ public partial class MainWindow : Window
         AuthorBox.Text = _spec.Quest.Author;
         ContentRootBox.Text = _spec.Output.ContentRoot;
         SpecPathBox.Text = _spec.Output.SpecPath;
-        CensusQuestBox.Text = "Manual template. No Census quest payload was fetched.";
-        CensusGiverBox.Text = "Manual template. No Census questgiver payload was fetched.";
+        CensusQuestBox.Text = "Manual template. No quest source payload was fetched.";
+        CensusGiverBox.Text = "Manual template. No questgiver source payload was fetched.";
 
         RebuildSections();
         SetWorkflowEnabled(true);
@@ -189,8 +198,8 @@ public partial class MainWindow : Window
         AuthorBox.Text = _spec.Quest.Author;
         ContentRootBox.Text = _spec.Output.ContentRoot;
         SpecPathBox.Text = _spec.Output.SpecPath;
-        CensusQuestBox.Text = "Loaded from spec. Census quest payload was not fetched in this session.";
-        CensusGiverBox.Text = "Loaded from spec. Census questgiver payload was not fetched in this session.";
+        CensusQuestBox.Text = "Loaded from spec. Quest source payload was not fetched in this session.";
+        CensusGiverBox.Text = "Loaded from spec. Questgiver source payload was not fetched in this session.";
 
         RebuildSections();
         SetWorkflowEnabled(true);
@@ -291,11 +300,66 @@ public partial class MainWindow : Window
             ContentRootBox.Text = folders[0].Path.LocalPath;
     }
 
+    private async Task BrowseCensusSourceAsync()
+    {
+        if (CurrentCensusSourceKind() != CensusSourceKind.Local)
+        {
+            AppendLog("Browse is only used for the local JSON source.");
+            return;
+        }
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.StorageProvider.CanPickFolder != true)
+        {
+            AppendLog("Folder picker is not available on this platform session.");
+            return;
+        }
+
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Choose downloaded Census JSON folder",
+            AllowMultiple = false
+        });
+
+        if (folders.Count > 0)
+            CensusLocationBox.Text = folders[0].Path.LocalPath;
+    }
+
+    private QuestWorkflow CreateWorkflowFromUi()
+    {
+        var source = CurrentCensusSourceKind();
+        var location = (CensusLocationBox.Text ?? "").Trim();
+        var options = CensusSourceOptions.FromEnvironment().WithOverrides(
+            source: source.ToString(),
+            baseUrl: source == CensusSourceKind.Local ? "" : location,
+            localDirectory: source == CensusSourceKind.Local ? location : "");
+
+        return new QuestWorkflow(censusClient: CensusClientFactory.Create(options));
+    }
+
+    private CensusSourceKind CurrentCensusSourceKind()
+    {
+        return CensusSourceBox.SelectedItem is CensusSourceKind kind ? kind : CensusSourceKind.Daybreak;
+    }
+
+    private void UpdateCensusLocationForSelectedSource()
+    {
+        var options = CensusSourceOptions.FromEnvironment() with { Kind = CurrentCensusSourceKind() };
+        CensusLocationBox.Text = LocationForSource(options);
+        RefreshActionStates();
+    }
+
+    private static string LocationForSource(CensusSourceOptions options)
+    {
+        return options.Kind == CensusSourceKind.Local
+            ? options.LocalDirectory ?? ""
+            : options.BaseUrl;
+    }
+
     private async Task LoadRawCensusTabsAsync(string questName)
     {
-        var cacheKey = Utilities.CacheKey(questName);
-        CensusQuestBox.Text = await ReadIfExistsAsync(Utilities.RuntimePath("cache", "census", $"{cacheKey}.quest.json"));
-        CensusGiverBox.Text = await ReadIfExistsAsync(Utilities.RuntimePath("cache", "census", $"{cacheKey}.questgivers.json"));
+        CensusQuestBox.Text = await ReadIfExistsAsync(Path.Combine(Defaults.CensusCacheDirectory, CensusClient.QuestJsonFileName(questName)));
+        CensusGiverBox.Text = await ReadIfExistsAsync(Path.Combine(Defaults.CensusCacheDirectory, CensusClient.QuestGiverJsonFileName(questName)));
     }
 
     private static async Task<string> ReadIfExistsAsync(string path)
@@ -1466,6 +1530,7 @@ public partial class MainWindow : Window
         NewTemplateButton.IsEnabled = !_busy;
         PreviewSpecButton.IsEnabled = !_busy;
         BrowseContentRootButton.IsEnabled = !_busy;
+        BrowseCensusSourceButton.IsEnabled = !_busy && CurrentCensusSourceKind() == CensusSourceKind.Local;
         PreviousButton.IsEnabled = !_busy && loaded;
         NextButton.IsEnabled = !_busy && loaded;
         ResolveSectionButton.IsEnabled = !_busy && loaded;

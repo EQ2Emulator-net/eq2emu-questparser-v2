@@ -162,4 +162,13 @@ public sealed class CensusQuestGiver
 
     [JsonPropertyName("zone")]
     public string Zone { get; set; } = "";
+
+    [JsonPropertyName("quest_list")]
+    public List<CensusQuestReference> QuestList { get; set; } = [];
+}
+
+public sealed class CensusQuestReference
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
 }

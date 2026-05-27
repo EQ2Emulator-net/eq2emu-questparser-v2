@@ -377,14 +377,14 @@ public sealed class MainForm : Form
         {
             SetBusy(true);
             ClearLoadedQuestState();
-            AppendLog($"Fetching Census quest '{questName}'.");
+            AppendLog($"Fetching quest source data for '{questName}'.");
 
             var imported = await _workflow.ImportAsync(
                 questName,
                 CleanPath(_contentRootBox.Text, Defaults.ContentRoot),
                 _authorBox.Text.Trim());
 
-            AppendLog($"Census import created spec: {imported.Spec.Output.SpecPath}");
+            AppendLog($"Quest source import created spec: {imported.Spec.Output.SpecPath}");
             AppendLog("Resolving DB references from MariaDB.");
             var resolved = await _workflow.ResolveAsync(imported.Spec.Output.SpecPath);
 
@@ -428,8 +428,8 @@ public sealed class MainForm : Form
                 _authorBox.Text.Trim());
 
             _spec = result.Spec;
-            _censusQuestBox.Text = "Manual template. No Census quest payload was fetched.";
-            _censusGiverBox.Text = "Manual template. No Census questgiver payload was fetched.";
+            _censusQuestBox.Text = "Manual template. No quest source payload was fetched.";
+            _censusGiverBox.Text = "Manual template. No questgiver source payload was fetched.";
             RebuildSections();
             SetWorkflowEnabled(true);
             SelectSection(0);
@@ -552,9 +552,8 @@ public sealed class MainForm : Form
 
     private async Task LoadRawCensusTabsAsync(string questName)
     {
-        var cacheKey = Utilities.CacheKey(questName);
-        _censusQuestBox.Text = await ReadIfExistsAsync(Utilities.RuntimePath("cache", "census", $"{cacheKey}.quest.json"));
-        _censusGiverBox.Text = await ReadIfExistsAsync(Utilities.RuntimePath("cache", "census", $"{cacheKey}.questgivers.json"));
+        _censusQuestBox.Text = await ReadIfExistsAsync(Path.Combine(Defaults.CensusCacheDirectory, CensusClient.QuestJsonFileName(questName)));
+        _censusGiverBox.Text = await ReadIfExistsAsync(Path.Combine(Defaults.CensusCacheDirectory, CensusClient.QuestGiverJsonFileName(questName)));
     }
 
     private static async Task<string> ReadIfExistsAsync(string path)

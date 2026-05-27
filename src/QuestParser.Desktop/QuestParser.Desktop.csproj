@@ -46,4 +46,11 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
   </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64'">
+    <None Include="..\..\packaging\linux\README-linux.txt" Link="README-linux.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <None Include="..\..\packaging\linux\eq2emu-questparser.desktop" Link="eq2emu-questparser.desktop" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <None Include="..\..\packaging\linux\install-desktop-launcher.sh" Link="install-desktop-launcher.sh" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <None Include="..\..\packaging\linux\run-eq2emu-questparser.sh" Link="run-eq2emu-questparser.sh" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+  </ItemGroup>
 </Project>

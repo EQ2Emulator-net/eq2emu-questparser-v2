@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=EQ2Emu QuestParser
+Comment=EQ2Emu quest authoring tool
+Exec=sh -c 'app_dir=$(dirname "$(readlink -f "$1")"); chmod +x "$app_dir/eq2emu-questparser" 2>/dev/null || true; exec "$app_dir/eq2emu-questparser"' sh %k
+Icon=applications-development
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true

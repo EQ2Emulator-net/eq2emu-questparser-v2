@@ -1,17 +1,9 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace QuestParser.Core;
 
 public sealed class QuestWorkflow
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
     private readonly ICensusClient _censusClient;
     private readonly QuestSpecFactory _specFactory;
     private readonly IQuestDatabaseResolver _resolver;
@@ -170,7 +162,7 @@ public sealed class QuestWorkflow
     public static async Task<QuestSpec> ReadSpecAsync(string specPath, CancellationToken cancellationToken = default)
     {
         await using var stream = File.OpenRead(specPath);
-        return await JsonSerializer.DeserializeAsync<QuestSpec>(stream, JsonOptions, cancellationToken).ConfigureAwait(false)
+        return await JsonSerializer.DeserializeAsync(stream, QuestSpecJsonContext.Default.QuestSpec, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Could not read quest spec '{specPath}'.");
     }
 
@@ -180,7 +172,7 @@ public sealed class QuestWorkflow
         spec.Generation.SpecWritten = true;
         spec.Generation.UpdatedAt = DateTimeOffset.UtcNow;
         await using var stream = File.Create(spec.Output.SpecPath);
-        await JsonSerializer.SerializeAsync(stream, spec, JsonOptions, cancellationToken).ConfigureAwait(false);
+        await JsonSerializer.SerializeAsync(stream, spec, QuestSpecJsonContext.Default.QuestSpec, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<List<string>> WriteOutputsAsync(QuestSpec spec, string lua, string sql, string missingReport, bool overwrite, CancellationToken cancellationToken)

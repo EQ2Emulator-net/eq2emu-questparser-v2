@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace QuestParser.Core;
 
+[JsonConverter(typeof(JsonStringEnumConverter<StepType>))]
 public enum StepType
 {
     Generic,
@@ -16,6 +17,7 @@ public enum StepType
     ZoneLocation
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<ResolveStatus>))]
 public enum ResolveStatus
 {
     Missing,
@@ -227,6 +229,7 @@ public sealed class QuestWorkflowResult
     public List<string> WrittenFiles { get; set; } = [];
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<QuestDiagnosticSeverity>))]
 public enum QuestDiagnosticSeverity
 {
     Info,
@@ -252,6 +255,7 @@ public sealed class MissingSpawnTemplate
     public List<string> Notes { get; set; } = [];
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<QuestTemplateKind>))]
 public enum QuestTemplateKind
 {
     Blank,

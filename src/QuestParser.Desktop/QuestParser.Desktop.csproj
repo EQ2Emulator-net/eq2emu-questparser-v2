@@ -2,11 +2,35 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
+    <AssemblyName>eq2emu-questparser</AssemblyName>
+    <Product>EQ2Emu QuestParser</Product>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+
+  <Target Name="RemoveReleasePublishSymbols" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' != ''">
+    <ItemGroup>
+      <ReleasePublishSymbols Include="$(PublishDir)**\*.pdb" />
+      <ReleasePublishSymbols Include="$(PublishDir)**\*.dbg" />
+      <ReleasePublishSymbolDirectories Include="$(PublishDir)**\*.dSYM" />
+    </ItemGroup>
+    <Delete Files="@(ReleasePublishSymbols)" />
+    <RemoveDir Directories="@(ReleasePublishSymbolDirectories)" />
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\QuestParser.Core\QuestParser.Core.csproj" />

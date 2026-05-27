@@ -4,13 +4,14 @@ Fresh .NET 9 quest authoring tool for EQ2Emu.
 
 ## Install
 
-Dependencies:
+Build dependencies:
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
 - Quest source access: Daybreak Census, a compatible remote mirror, or local downloaded JSON files
 - Optional: MariaDB/MySQL access to an EQ2Emu world database for automatic ID resolution
-- Optional: Windows desktop runtime for the legacy WinForms UI
 - Linux desktop runs require a normal graphical session, such as X11 or Wayland
+
+Release desktop executables are self-contained and do not require users to install the .NET runtime.
 
 Setup:
 
@@ -27,7 +28,7 @@ Run the cross-platform desktop UI:
 dotnet run --project src\QuestParser.Desktop
 ```
 
-Run the legacy WinForms UI on Windows:
+Run the deprecated WinForms UI on Windows:
 
 ```powershell
 dotnet run --project src\QuestParser.WinForms
@@ -112,7 +113,7 @@ dotnet run --project src\QuestParser.WinForms
 previews generated Lua/SQL/missing reports/spec JSON, and can generate files. The Quest Source panel can switch
 between Daybreak, a compatible remote mirror, and a local JSON folder before importing.
 
-`QuestParser.WinForms` is the older Windows-only UI. It fetches a quest by name, resolves DB references, then shows the imported quest-source data, DB candidates,
+`QuestParser.WinForms` is deprecated and kept only as the older Windows-only UI. It fetches a quest by name, resolves DB references, then shows the imported quest-source data, DB candidates,
 editable quest/spec fields, generated Lua, review SQL, missing-data report, and raw cached Census JSON.
 Each generated section must be manually verified before files can be written. Existing Lua files are still
 protected unless `Overwrite Lua` is checked.
@@ -157,10 +158,26 @@ dotnet test
 
 ## Publish
 
-Framework-dependent desktop builds:
+`QuestParser.Desktop` is the release entry point. One executable cannot run on Windows, Linux, and macOS, so publish one self-contained single-file executable per OS/CPU runtime. Release publishes are trimmed, compressed, self-contained, and remove debug symbols from the publish folder.
 
 ```powershell
-dotnet publish src\QuestParser.Desktop -c Release -r win-x64 --self-contained false
-dotnet publish src\QuestParser.Desktop -c Release -r linux-x64 --self-contained false
-dotnet publish src\QuestParser.Desktop -c Release -r osx-arm64 --self-contained false
+dotnet publish src\QuestParser.Desktop -c Release -r win-x64 -o artifacts\release\win-x64
+dotnet publish src\QuestParser.Desktop -c Release -r linux-x64 -o artifacts\release\linux-x64
+dotnet publish src\QuestParser.Desktop -c Release -r osx-arm64 -o artifacts\release\osx-arm64
+dotnet publish src\QuestParser.Desktop -c Release -r osx-x64 -o artifacts\release\osx-x64
+```
+
+Publish output:
+
+- Windows: `artifacts\release\win-x64\eq2emu-questparser.exe`
+- Linux: `artifacts\release\linux-x64\eq2emu-questparser`
+- macOS Apple Silicon: `artifacts\release\osx-arm64\eq2emu-questparser`
+- macOS Intel: `artifacts\release\osx-x64\eq2emu-questparser`
+
+Use `win-arm64` or `linux-arm64` if you want ARM64 releases for those platforms.
+
+For Linux/macOS downloads, users may need to run:
+
+```bash
+chmod +x eq2emu-questparser
 ```

@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -13,13 +12,6 @@ namespace QuestParser.Desktop;
 
 public partial class MainWindow : Window
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
     private QuestWorkflow _workflow = new();
     private readonly List<ReviewSection> _sections = [];
     private readonly HashSet<string> _verifiedSections = [];
@@ -977,7 +969,7 @@ public partial class MainWindow : Window
             LuaPreviewBox.Text = preview.Lua;
             SqlPreviewBox.Text = preview.Sql;
             MissingPreviewBox.Text = preview.MissingReport;
-            SpecPreviewBox.Text = JsonSerializer.Serialize(_spec, JsonOptions);
+            SpecPreviewBox.Text = JsonSerializer.Serialize(_spec, QuestSpecJsonContext.Default.QuestSpec);
             SectionLuaBox.Text = BuildSectionLuaPreview(preview.Lua);
             RefreshDiagnostics();
         }

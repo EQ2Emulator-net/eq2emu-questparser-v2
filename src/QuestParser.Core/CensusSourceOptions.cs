@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace QuestParser.Core;
 
+[JsonConverter(typeof(JsonStringEnumConverter<CensusSourceKind>))]
 public enum CensusSourceKind
 {
     Daybreak,

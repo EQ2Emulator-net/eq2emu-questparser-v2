@@ -10,12 +10,6 @@ public interface ICensusClient
 
 public sealed class CensusClient : ICensusClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip
-    };
-
     private readonly HttpClient _httpClient;
     private readonly string _cacheDirectory;
     private readonly string _baseUrl;
@@ -76,7 +70,7 @@ public sealed class CensusClient : ICensusClient
 
     public static CensusQuest ReadQuestFromJson(string questName, string rawJson)
     {
-        var questResponse = JsonSerializer.Deserialize<CensusQuestResponse>(rawJson, JsonOptions)
+        var questResponse = JsonSerializer.Deserialize(rawJson, CensusJsonContext.Default.CensusQuestResponse)
             ?? throw new InvalidOperationException("Census source returned an unreadable quest response.");
         var quest = questResponse.QuestList.FirstOrDefault(quest => string.Equals(quest.Name, questName, StringComparison.OrdinalIgnoreCase))
             ?? questResponse.QuestList.FirstOrDefault()
@@ -86,7 +80,7 @@ public sealed class CensusClient : ICensusClient
 
     public static IReadOnlyList<CensusQuestGiver> ReadQuestGiversFromJson(string rawJson, long questId)
     {
-        var giverResponse = JsonSerializer.Deserialize<CensusQuestGiverResponse>(rawJson, JsonOptions) ?? new();
+        var giverResponse = JsonSerializer.Deserialize(rawJson, CensusJsonContext.Default.CensusQuestGiverResponse) ?? new();
         if (giverResponse.QuestGiverList.Any(giver => giver.QuestList.Count > 0))
             return giverResponse.QuestGiverList
                 .Where(giver => giver.QuestList.Any(quest => quest.Id == questId))

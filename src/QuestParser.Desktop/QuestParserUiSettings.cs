@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using QuestParser.Core;
 
 namespace QuestParser.Desktop;
@@ -20,13 +19,6 @@ public sealed record QuestParserUiSettings
     public const double MaxDataTextSize = 18;
     public const double MinSectionTitleTextSize = 14;
     public const double MaxSectionTitleTextSize = 22;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
 
     private static string SettingsPath => Utilities.RuntimePath("config", "desktop-settings.json");
 
@@ -67,7 +59,7 @@ public sealed record QuestParserUiSettings
                 return FromEnvironment();
 
             var json = File.ReadAllText(SettingsPath);
-            return (JsonSerializer.Deserialize<QuestParserUiSettings>(json, JsonOptions) ?? FromEnvironment()).Normalize();
+            return (JsonSerializer.Deserialize(json, QuestParserDesktopJsonContext.Default.QuestParserUiSettings) ?? FromEnvironment()).Normalize();
         }
         catch
         {
@@ -80,7 +72,7 @@ public sealed record QuestParserUiSettings
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
         await File.WriteAllTextAsync(
             SettingsPath,
-            JsonSerializer.Serialize(Normalize(), JsonOptions),
+            JsonSerializer.Serialize(Normalize(), QuestParserDesktopJsonContext.Default.QuestParserUiSettings),
             cancellationToken).ConfigureAwait(false);
     }
 

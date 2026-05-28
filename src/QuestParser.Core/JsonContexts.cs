@@ -8,6 +8,8 @@ namespace QuestParser.Core;
     ReadCommentHandling = JsonCommentHandling.Skip)]
 [JsonSerializable(typeof(CensusQuestResponse))]
 [JsonSerializable(typeof(CensusQuestGiverResponse))]
+[JsonSerializable(typeof(CensusQuest))]
+[JsonSerializable(typeof(CensusQuestGiver))]
 public sealed partial class CensusJsonContext : JsonSerializerContext;
 
 [JsonSourceGenerationOptions(

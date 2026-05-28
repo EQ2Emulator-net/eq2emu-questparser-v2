@@ -131,7 +131,7 @@ public sealed class CensusReward
 public sealed class CensusRewardItem
 {
     [JsonPropertyName("id")]
-    public int Id { get; set; }
+    public long Id { get; set; }
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
@@ -143,7 +143,7 @@ public sealed class CensusRewardItem
 public sealed class CensusFactionChange
 {
     [JsonPropertyName("id")]
-    public int Id { get; set; }
+    public long Id { get; set; }
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";

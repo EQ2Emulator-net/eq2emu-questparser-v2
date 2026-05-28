@@ -55,12 +55,12 @@ public sealed class LuaGenerator
         if (spec.QuestId.Status == ResolveStatus.Proposed)
             writer.AppendLine("-- TODO DB: Quest ID is proposed. Review generated SQL before loading this quest.");
 
-        if (spec.Giver.Id is int giverId)
+        if (spec.Giver.Id is long giverId)
             writer.AppendLine($"local QUEST_GIVER_ID = {giverId}");
 
         foreach (var step in spec.Stages.SelectMany(stage => stage.Steps))
         {
-            if (step.Target.Id is not int targetId)
+            if (step.Target.Id is not long targetId)
                 continue;
 
             var kind = QuestSpecFactory.KindForStepType(step.Type).ToUpperInvariant();
@@ -264,7 +264,7 @@ public sealed class LuaGenerator
 
     private static string TargetIds(QuestStepSpec step)
     {
-        if (step.Target.Id is int id)
+        if (step.Target.Id is long id)
             return $", {id}";
         if (step.Target.Ids.Count > 0)
             return ", " + string.Join(", ", step.Target.Ids);
@@ -273,7 +273,7 @@ public sealed class LuaGenerator
 
     private static string TargetIds(QuestStepOptionSpec option)
     {
-        if (option.Target.Id is int id)
+        if (option.Target.Id is long id)
             return $", {id}";
         if (option.Target.Ids.Count > 0)
             return ", " + string.Join(", ", option.Target.Ids);

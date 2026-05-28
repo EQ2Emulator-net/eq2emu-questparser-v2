@@ -91,7 +91,7 @@ public sealed class SqlReportGenerator
         return writer.ToString();
     }
 
-    private static void WriteQuestDetails(StringBuilder writer, QuestSpec spec, int questId)
+    private static void WriteQuestDetails(StringBuilder writer, QuestSpec spec, long questId)
     {
         if (spec.Rewards.CoinMin > 0)
         {
@@ -169,7 +169,7 @@ public sealed class SqlReportGenerator
 
     private static void WriteSpawnScript(StringBuilder writer, QuestSpec spec)
     {
-        if (spec.Giver.Id is not int giverId)
+        if (spec.Giver.Id is not long giverId)
             return;
 
         var script = Path.Combine("SpawnScripts", Utilities.SafeDirectoryName(spec.Quest.Zone), $"{Utilities.IdentifierFromName(spec.Giver.Name.Length > 0 ? spec.Giver.Name : spec.Giver.Query)}.lua").Replace('\\', '/');

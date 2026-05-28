@@ -106,6 +106,16 @@ Local mode expects Census-compatible response JSON. For a quest named `A Hunter'
 
 It also accepts `quest.json`/`quests.json` and `questgiver.json`/`questgivers.json` for single-dataset folders.
 
+Download a local EQ2 Census snapshot for local mode:
+
+```powershell
+.\scripts\Download-Eq2CensusLocalData.ps1 -RequestDelaySeconds 10
+$env:EQ2QP_CENSUS_SOURCE = "local"
+$env:EQ2QP_CENSUS_LOCAL_DIR = ".\artifacts\census\eq2"
+```
+
+The downloader writes parser-ready `quest.json`, `questgiver.json`, and `questgivers.json`, plus raw Census page responses under `raw\`. By default it fetches `quest`, `questgiver`, `npc`, `faction`, `zone`, and `world`; pass `-Collections quest,questgiver` for the smallest parser-only snapshot or add other EQ2 collection names as needed. Quest and questgiver use Census `c:show` field selection by default so large pages can be fetched reliably; pass `-NoFieldSelection` for slower unfiltered 100-row Census batches.
+
 ## Commands
 
 UI:

@@ -70,12 +70,24 @@ public sealed class CensusClient : ICensusClient
 
     public static CensusQuest ReadQuestFromJson(string questName, string rawJson)
     {
-        var questResponse = JsonSerializer.Deserialize(rawJson, CensusJsonContext.Default.CensusQuestResponse)
-            ?? throw new InvalidOperationException("Census source returned an unreadable quest response.");
-        var quest = questResponse.QuestList.FirstOrDefault(quest => string.Equals(quest.Name, questName, StringComparison.OrdinalIgnoreCase))
-            ?? questResponse.QuestList.FirstOrDefault()
-            ?? throw new InvalidOperationException($"Census source did not return quest '{questName}'.");
-        return quest;
+        using var document = JsonDocument.Parse(rawJson);
+        if (!document.RootElement.TryGetProperty("quest_list", out var questList) || questList.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("Census source returned an unreadable quest response.");
+
+        JsonElement? fallback = null;
+        foreach (var questElement in questList.EnumerateArray())
+        {
+            fallback ??= questElement.Clone();
+            if (!questElement.TryGetProperty("name", out var nameElement) || nameElement.ValueKind != JsonValueKind.String)
+                continue;
+
+            if (string.Equals(nameElement.GetString(), questName, StringComparison.OrdinalIgnoreCase))
+                return ReadQuestElement(questElement, questName);
+        }
+
+        return fallback.HasValue
+            ? ReadQuestElement(fallback.Value, questName)
+            : throw new InvalidOperationException($"Census source did not return quest '{questName}'.");
     }
 
     public static IReadOnlyList<CensusQuestGiver> ReadQuestGiversFromJson(string rawJson, long questId)
@@ -122,6 +134,12 @@ public sealed class CensusClient : ICensusClient
     private static string NormalizeServiceId(string? serviceId)
     {
         return (string.IsNullOrWhiteSpace(serviceId) ? Defaults.CensusServiceId : serviceId).Trim('/');
+    }
+
+    private static CensusQuest ReadQuestElement(JsonElement questElement, string questName)
+    {
+        return questElement.Deserialize(CensusJsonContext.Default.CensusQuest)
+            ?? throw new InvalidOperationException($"Census source returned unreadable quest data for '{questName}'.");
     }
 }
 

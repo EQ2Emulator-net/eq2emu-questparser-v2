@@ -159,10 +159,10 @@ public sealed class ResolvedReference
     public string Kind { get; set; } = "";
     public string Query { get; set; } = "";
     public ResolveStatus Status { get; set; }
-    public int? Id { get; set; }
+    public long? Id { get; set; }
     public string Name { get; set; } = "";
     public string Source { get; set; } = "";
-    public List<int> Ids { get; set; } = [];
+    public List<long> Ids { get; set; } = [];
     public List<ResolveCandidate> Candidates { get; set; } = [];
     public Dictionary<string, string> Metadata { get; set; } = [];
 
@@ -176,7 +176,7 @@ public sealed class ResolvedReference
         Source = "Unresolved"
     };
 
-    public static ResolvedReference Proposed(string kind, string query, int id, string name = "", string source = "DB proposed value") => new()
+    public static ResolvedReference Proposed(string kind, string query, long id, string name = "", string source = "DB proposed value") => new()
     {
         Kind = kind,
         Query = query,
@@ -187,7 +187,7 @@ public sealed class ResolvedReference
         Ids = [id]
     };
 
-    public static ResolvedReference Resolved(string kind, string query, int id, string name = "", Dictionary<string, string>? metadata = null, string source = "DB resolved value") => new()
+    public static ResolvedReference Resolved(string kind, string query, long id, string name = "", Dictionary<string, string>? metadata = null, string source = "DB resolved value") => new()
     {
         Kind = kind,
         Query = query,

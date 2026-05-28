@@ -31,7 +31,7 @@
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Author" VerticalAlignment="Center" />
                 <TextBox Grid.Row="0" Grid.Column="3" Name="AuthorBox" />
 
-                <CheckBox Grid.Row="0" Grid.Column="6" Name="OverwriteBox" Content="Overwrite Lua" VerticalAlignment="Center" />
+                <CheckBox Grid.Row="0" Grid.Column="6" Name="OverwriteBox" Content="Overwrite files" VerticalAlignment="Center" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Template" VerticalAlignment="Center" />
                 <ComboBox Grid.Row="1" Grid.Column="1" Name="TemplateBox" />
@@ -133,6 +133,9 @@
                         </TabItem>
                         <TabItem Header="Lua Preview">
                             <TextBox Name="LuaPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                        </TabItem>
+                        <TabItem Header="Spawn Starter">
+                            <TextBox Name="SpawnScriptPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />
                         </TabItem>
                         <TabItem Header="SQL Preview">
                             <TextBox Name="SqlPreviewBox" Classes="mono-box" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" />

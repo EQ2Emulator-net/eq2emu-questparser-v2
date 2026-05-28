@@ -114,7 +114,7 @@ $env:EQ2QP_CENSUS_SOURCE = "local"
 $env:EQ2QP_CENSUS_LOCAL_DIR = ".\artifacts\census\eq2"
 ```
 
-The downloader writes parser-ready `quest.json`, `questgiver.json`, and `questgivers.json`, plus raw Census page responses under `raw\`. By default it fetches `quest`, `questgiver`, `npc`, `faction`, `zone`, and `world`; pass `-Collections quest,questgiver` for the smallest parser-only snapshot or add other EQ2 collection names as needed. Quest and questgiver use Census `c:show` field selection by default so large pages can be fetched reliably; pass `-NoFieldSelection` for slower unfiltered 100-row Census batches.
+The downloader writes parser-ready `quest.json`, `questgiver.json`, `questgivers.json`, and `item.json`, plus raw Census page responses under `raw\`. By default it fetches `quest`, `questgiver`, `item`, `npc`, `faction`, `zone`, and `world`; pass `-Collections quest,questgiver,item` for the smallest reward-aware parser snapshot or add other EQ2 collection names as needed. Quest, questgiver, and item use Census `c:show` field selection by default so large pages can be fetched reliably; pass `-NoFieldSelection` for slower unfiltered 100-row Census batches.
 
 ## Commands
 
@@ -153,14 +153,17 @@ dotnet run --project src\QuestParser.Cli -- generate --spec ".\eq2emu-content\Qu
 dotnet run --project src\QuestParser.Cli -- lint
 ```
 
-Existing Lua files are protected by default. Use `--overwrite` with `create` or `generate` when replacement is intentional.
+Existing generated files are protected by default. Use `--overwrite` with `create` or `generate` when replacement is intentional.
 
 Generated files:
 
 - `Quests\<Zone>\<quest>.quest.json`
 - `Quests\<Zone>\<quest>.lua`
+- `SpawnScripts\<Zone>\<quest-giver>.example.lua`
 - `Quests\<Zone>\<quest>.quest.sql`
 - `Quests\<Zone>\<quest>.missing.md`
+
+The spawn script is an example starter scaffold for the resolved quest giver. Merge the relevant hail, click/cast, use, or item-examine hook into the live spawn or item script after review.
 
 The SQL file is review-only. The tool resolves from the DB but does not insert, update, or delete database rows.
 Static quest rewards are emitted as `quest_details` SQL rows instead of Lua reward calls, so applying both generated Lua and generated SQL will not duplicate rewards.

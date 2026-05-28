@@ -8,6 +8,7 @@ public sealed class QuestWorkflow
     private readonly QuestSpecFactory _specFactory;
     private readonly IQuestDatabaseResolver _resolver;
     private readonly LuaGenerator _luaGenerator;
+    private readonly SpawnScriptGenerator _spawnScriptGenerator;
     private readonly SqlReportGenerator _sqlReportGenerator;
     private readonly QuestTemplateFactory _templateFactory = new();
 
@@ -16,12 +17,14 @@ public sealed class QuestWorkflow
         QuestSpecFactory? specFactory = null,
         IQuestDatabaseResolver? resolver = null,
         LuaGenerator? luaGenerator = null,
+        SpawnScriptGenerator? spawnScriptGenerator = null,
         SqlReportGenerator? sqlReportGenerator = null)
     {
         _censusClient = censusClient ?? CensusClientFactory.CreateDefault();
         _specFactory = specFactory ?? new QuestSpecFactory();
         _resolver = resolver ?? QuestDatabaseResolverFactory.CreateDefault();
         _luaGenerator = luaGenerator ?? new LuaGenerator();
+        _spawnScriptGenerator = spawnScriptGenerator ?? new SpawnScriptGenerator();
         _sqlReportGenerator = sqlReportGenerator ?? new SqlReportGenerator();
     }
 
@@ -52,28 +55,32 @@ public sealed class QuestWorkflow
         var spec = await ReadSpecAsync(specPath, cancellationToken).ConfigureAwait(false);
         var preview = Preview(spec);
         var lua = preview.Lua;
+        var spawnScript = preview.SpawnScript;
         var sql = preview.Sql;
         var missing = preview.MissingReport;
-        var written = await WriteOutputsAsync(spec, lua, sql, missing, overwrite, cancellationToken).ConfigureAwait(false);
-        return new QuestWorkflowResult { Spec = spec, Lua = lua, Sql = sql, MissingReport = missing, WrittenFiles = written };
+        var written = await WriteOutputsAsync(spec, lua, spawnScript, sql, missing, overwrite, cancellationToken).ConfigureAwait(false);
+        return new QuestWorkflowResult { Spec = spec, Lua = lua, SpawnScript = spawnScript, Sql = sql, MissingReport = missing, WrittenFiles = written };
     }
 
     public QuestWorkflowResult Preview(QuestSpec spec)
     {
+        EnsureSpawnScriptPath(spec);
         var lua = _luaGenerator.Generate(spec);
+        var spawnScript = _spawnScriptGenerator.Generate(spec);
         var sql = _sqlReportGenerator.GenerateSql(spec);
         var missing = _sqlReportGenerator.GenerateMissingReport(spec);
-        return new QuestWorkflowResult { Spec = spec, Lua = lua, Sql = sql, MissingReport = missing };
+        return new QuestWorkflowResult { Spec = spec, Lua = lua, SpawnScript = spawnScript, Sql = sql, MissingReport = missing };
     }
 
     public async Task<QuestWorkflowResult> GenerateFromSpecAsync(QuestSpec spec, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         var preview = Preview(spec);
-        var written = await WriteOutputsAsync(spec, preview.Lua, preview.Sql, preview.MissingReport, overwrite, cancellationToken).ConfigureAwait(false);
+        var written = await WriteOutputsAsync(spec, preview.Lua, preview.SpawnScript, preview.Sql, preview.MissingReport, overwrite, cancellationToken).ConfigureAwait(false);
         return new QuestWorkflowResult
         {
             Spec = spec,
             Lua = preview.Lua,
+            SpawnScript = preview.SpawnScript,
             Sql = preview.Sql,
             MissingReport = preview.MissingReport,
             WrittenFiles = written
@@ -88,10 +95,11 @@ public sealed class QuestWorkflow
 
         var preview = Preview(spec);
         var lua = preview.Lua;
+        var spawnScript = preview.SpawnScript;
         var sql = preview.Sql;
         var missing = preview.MissingReport;
-        var written = await WriteOutputsAsync(spec, lua, sql, missing, overwrite, cancellationToken).ConfigureAwait(false);
-        return new QuestWorkflowResult { Spec = spec, Lua = lua, Sql = sql, MissingReport = missing, WrittenFiles = written };
+        var written = await WriteOutputsAsync(spec, lua, spawnScript, sql, missing, overwrite, cancellationToken).ConfigureAwait(false);
+        return new QuestWorkflowResult { Spec = spec, Lua = lua, SpawnScript = spawnScript, Sql = sql, MissingReport = missing, WrittenFiles = written };
     }
 
     public async Task<ResolvedReference> ResolveQuestIdAsync(QuestSpec spec, CancellationToken cancellationToken = default)
@@ -146,7 +154,9 @@ public sealed class QuestWorkflow
     {
         foreach (var reward in spec.Rewards.Items.Where(item => !string.IsNullOrWhiteSpace(item.Item.Query)))
         {
-            reward.Item = await _resolver.ResolveReferenceAsync("item", reward.Item.Query, "", cancellationToken).ConfigureAwait(false);
+            reward.Item = ResolvedReferenceContext.Preserve(
+                reward.Item,
+                await _resolver.ResolveReferenceAsync("item", reward.Item.Query, "", cancellationToken).ConfigureAwait(false));
             spec.Provenance["rewards.items"] = reward.Item.Source;
         }
 
@@ -175,10 +185,12 @@ public sealed class QuestWorkflow
         await JsonSerializer.SerializeAsync(stream, spec, QuestSpecJsonContext.Default.QuestSpec, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<List<string>> WriteOutputsAsync(QuestSpec spec, string lua, string sql, string missingReport, bool overwrite, CancellationToken cancellationToken)
+    private async Task<List<string>> WriteOutputsAsync(QuestSpec spec, string lua, string spawnScript, string sql, string missingReport, bool overwrite, CancellationToken cancellationToken)
     {
         var written = new List<string>();
+        EnsureSpawnScriptPath(spec);
         Directory.CreateDirectory(spec.Output.QuestDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(spec.Output.SpawnScriptPath)!);
         Directory.CreateDirectory(Utilities.RuntimePath("output", "preview"));
         Directory.CreateDirectory(Utilities.RuntimePath("output", "sql"));
         Directory.CreateDirectory(Utilities.RuntimePath("output", "reports"));
@@ -186,6 +198,8 @@ public sealed class QuestWorkflow
 
         if (File.Exists(spec.Output.LuaPath) && !overwrite)
             throw new IOException($"Lua file already exists: {spec.Output.LuaPath}. Re-run with --overwrite to replace it.");
+        if (File.Exists(spec.Output.SpawnScriptPath) && !overwrite)
+            throw new IOException($"Spawn script example already exists: {spec.Output.SpawnScriptPath}. Re-run with --overwrite to replace it.");
 
         await File.WriteAllTextAsync(spec.Output.PreviewPath, lua, cancellationToken).ConfigureAwait(false);
         written.Add(spec.Output.PreviewPath);
@@ -196,6 +210,10 @@ public sealed class QuestWorkflow
         await File.WriteAllTextAsync(spec.Output.LuaPath, lua, cancellationToken).ConfigureAwait(false);
         spec.Generation.LuaWritten = true;
         written.Add(spec.Output.LuaPath);
+
+        await File.WriteAllTextAsync(spec.Output.SpawnScriptPath, spawnScript, cancellationToken).ConfigureAwait(false);
+        spec.Generation.SpawnScriptWritten = true;
+        written.Add(spec.Output.SpawnScriptPath);
 
         await File.WriteAllTextAsync(spec.Output.SqlPath, sql, cancellationToken).ConfigureAwait(false);
         spec.Generation.SqlWritten = true;
@@ -209,6 +227,12 @@ public sealed class QuestWorkflow
 
         await WriteSpecAsync(spec, cancellationToken).ConfigureAwait(false);
         return written;
+    }
+
+    private static void EnsureSpawnScriptPath(QuestSpec spec)
+    {
+        if (string.IsNullOrWhiteSpace(spec.Output.SpawnScriptPath))
+            spec.Output.SpawnScriptPath = SpawnScriptGenerator.BuildExamplePath(spec);
     }
 
     private static void UpdateTodos(QuestSpec spec)

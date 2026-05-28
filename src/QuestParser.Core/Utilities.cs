@@ -27,6 +27,17 @@ public static partial class Utilities
         return Path.ChangeExtension(NormalizeQuestFileName(questName), ".missing.md");
     }
 
+    public static string NormalizeSpawnScriptFileName(string spawnName)
+    {
+        var identifier = IdentifierFromName(spawnName);
+        return (identifier == "QuestId" ? "QuestGiver" : identifier) + ".lua";
+    }
+
+    public static string NormalizeSpawnScriptExampleFileName(string spawnName)
+    {
+        return Path.ChangeExtension(NormalizeSpawnScriptFileName(spawnName), ".example.lua");
+    }
+
     public static string SafeDirectoryName(string value)
     {
         var cleaned = InvalidDirectoryCharsRegex().Replace(value.Replace(" ", ""), "");

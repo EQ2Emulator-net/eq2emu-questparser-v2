@@ -124,6 +124,9 @@ public sealed class CensusReward
     [JsonPropertyName("item_list")]
     public List<CensusRewardItem> ItemList { get; set; } = [];
 
+    [JsonPropertyName("selected_item_list")]
+    public List<CensusRewardItem> SelectedItemList { get; set; } = [];
+
     [JsonPropertyName("factionchange_list")]
     public List<CensusFactionChange> FactionChangeList { get; set; } = [];
 }
@@ -136,8 +139,38 @@ public sealed class CensusRewardItem
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
+    [JsonPropertyName("displayname")]
+    public string DisplayName { get; set; } = "";
+
     [JsonPropertyName("quantity")]
     public int Quantity { get; set; } = 1;
+}
+
+public sealed class CensusItemResponse
+{
+    [JsonPropertyName("item_list")]
+    public List<CensusItem> ItemList { get; set; } = [];
+
+    [JsonPropertyName("returned")]
+    public int Returned { get; set; }
+}
+
+public sealed class CensusItem
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("displayname")]
+    public string DisplayName { get; set; } = "";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("itemlevel")]
+    public int ItemLevel { get; set; }
+
+    [JsonPropertyName("visible")]
+    public int Visible { get; set; }
 }
 
 public sealed class CensusFactionChange

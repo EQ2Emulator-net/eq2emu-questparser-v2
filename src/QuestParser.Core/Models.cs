@@ -68,6 +68,7 @@ public sealed class OutputPaths
     public string SqlPath { get; set; } = "";
     public string MissingReportPath { get; set; } = "";
     public string PreviewPath { get; set; } = "";
+    public string SpawnScriptPath { get; set; } = "";
 }
 
 public sealed class QuestStageSpec
@@ -151,6 +152,7 @@ public sealed class GenerationStatus
     public bool SpecWritten { get; set; }
     public bool SqlWritten { get; set; }
     public bool MissingReportWritten { get; set; }
+    public bool SpawnScriptWritten { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -211,7 +213,7 @@ public sealed class ResolvedReference
 
 public sealed class ResolveCandidate
 {
-    public int Id { get; set; }
+    public long Id { get; set; }
     public string Name { get; set; } = "";
     public string Kind { get; set; } = "";
     public string Zone { get; set; } = "";
@@ -220,10 +222,34 @@ public sealed class ResolveCandidate
     public Dictionary<string, string> Metadata { get; set; } = [];
 }
 
+internal static class ResolvedReferenceContext
+{
+    public static ResolvedReference Preserve(ResolvedReference original, ResolvedReference resolved)
+    {
+        if (string.IsNullOrWhiteSpace(resolved.Name) && !string.IsNullOrWhiteSpace(original.Name))
+            resolved.Name = original.Name;
+
+        foreach (var pair in original.Metadata)
+            resolved.Metadata.TryAdd(pair.Key, pair.Value);
+
+        if (!string.IsNullOrWhiteSpace(original.Source)
+            && original.Source.StartsWith("Census ", StringComparison.OrdinalIgnoreCase)
+            && !resolved.Source.Contains(original.Source, StringComparison.OrdinalIgnoreCase))
+        {
+            resolved.Source = string.IsNullOrWhiteSpace(resolved.Source)
+                ? original.Source
+                : resolved.Source + "; " + original.Source;
+        }
+
+        return resolved;
+    }
+}
+
 public sealed class QuestWorkflowResult
 {
     public QuestSpec Spec { get; set; } = new();
     public string Lua { get; set; } = "";
+    public string SpawnScript { get; set; } = "";
     public string Sql { get; set; } = "";
     public string MissingReport { get; set; } = "";
     public List<string> WrittenFiles { get; set; } = [];

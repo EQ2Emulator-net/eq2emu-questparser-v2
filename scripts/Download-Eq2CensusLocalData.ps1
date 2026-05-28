@@ -6,6 +6,7 @@ param(
     [string[]]$Collections = @(
         "quest",
         "questgiver",
+        "item",
         "npc",
         "faction",
         "zone",
@@ -388,6 +389,7 @@ foreach ($datatype in @($datatypes.datatype_list)) {
 $fieldSelections = @{
     quest = "category,name,level,scales_with_level,is_tradeskill,ts,stage_list,last_update,crc,completion_text,shareable,starter_text,complete_shareable,tier,repeatable,reward_list,id"
     questgiver = "id,name,zone,quest_list,ts,last_update"
+    item = "id,displayname,itemlevel,visible,ts,last_update"
 }
 
 $manifestCollections = @()
@@ -446,7 +448,7 @@ $manifest = [ordered]@{
     field_selection_enabled = -not $NoFieldSelection
     request_delay_seconds = $RequestDelaySeconds
     request_count = $requestCount
-    parser_ready_files = @("quest.json", "questgiver.json", "questgivers.json")
+    parser_ready_files = @("quest.json", "questgiver.json", "questgivers.json", "item.json")
     collections = $manifestCollections
 }
 

@@ -57,6 +57,64 @@ public sealed class QuestParserCoreTests
         }
     }
 
+    [Fact]
+    public async Task LocalCensusClientReadsRewardItemDetailsWhenAvailable()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-local-census-" + Guid.NewGuid().ToString("N"));
+        var source = Path.Combine(tempRoot, "source");
+        var cache = Path.Combine(tempRoot, "cache");
+        Directory.CreateDirectory(source);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(source, CensusClient.QuestJsonFileName("Slay the Revenant Soldiers")), SampleSelectableRewardQuestJson());
+            await File.WriteAllTextAsync(Path.Combine(source, CensusClient.QuestGiverJsonFileName("Slay the Revenant Soldiers")), """{"questgiver_list":[],"returned":0}""");
+            await File.WriteAllTextAsync(Path.Combine(source, "item.json"), SampleRewardItemJson());
+
+            var import = await new LocalCensusClient(source, cache).FetchQuestAsync("Slay the Revenant Soldiers");
+
+            Assert.Equal(4, import.RewardItems?.Count);
+            Assert.Equal("Band of Unimaginable Power", import.RewardItems?[2309818981].DisplayName);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SpecFactoryIncludesSelectableRewardItems()
+    {
+        var quest = JsonSerializer.Deserialize<CensusQuestResponse>(SampleSelectableRewardQuestJson(), JsonOptions())!.QuestList[0];
+        var items = JsonSerializer.Deserialize<CensusItemResponse>(SampleRewardItemJson(), JsonOptions())!.ItemList.ToDictionary(item => item.Id);
+        var spec = new QuestSpecFactory().Create(
+            new CensusQuestImport(quest, [], items),
+            Path.Combine(Path.GetTempPath(), "eq2-content-test"),
+            "Tester");
+
+        Assert.Equal(4, spec.Rewards.Items.Count);
+        Assert.All(spec.Rewards.Items, item => Assert.True(item.IsSelectable));
+        Assert.Equal("Band of Unimaginable Power", spec.Rewards.Items[0].Item.Query);
+        Assert.Equal(ResolveStatus.Missing, spec.Rewards.Items[0].Item.Status);
+        Assert.Equal("2309818981", spec.Rewards.Items[0].Item.Metadata["census_id"]);
+        Assert.Contains("selectable reward item", spec.Rewards.Items[0].Item.Source);
+    }
+
+    [Fact]
+    public void SpecFactoryKeepsSelectableRewardIdsWhenItemDetailsAreUnavailable()
+    {
+        var quest = JsonSerializer.Deserialize<CensusQuestResponse>(SampleSelectableRewardQuestJson(), JsonOptions())!.QuestList[0];
+        var spec = new QuestSpecFactory().Create(
+            new CensusQuestImport(quest, []),
+            Path.Combine(Path.GetTempPath(), "eq2-content-test"),
+            "Tester");
+
+        Assert.Equal(4, spec.Rewards.Items.Count);
+        Assert.All(spec.Rewards.Items, item => Assert.True(item.IsSelectable));
+        Assert.Equal("2309818981", spec.Rewards.Items[0].Item.Query);
+        Assert.Contains("item census details not found", spec.Rewards.Items[0].Item.Source);
+    }
+
     [Theory]
     [InlineData("I need to return to J.P. Feterman", StepType.Chat)]
     [InlineData("I must kill five sandstone giants", StepType.Kill)]
@@ -215,6 +273,25 @@ public sealed class QuestParserCoreTests
     }
 
     [Fact]
+    public void SpawnScriptGeneratorCreatesFlexibleQuestStarterExample()
+    {
+        var spec = BuildResolvedSpec();
+
+        var lua = new SpawnScriptGenerator().Generate(spec);
+
+        Assert.Contains("SpawnScripts/Commonlands/JPFeterman.example.lua", lua);
+        Assert.Contains("Suggested live spawn script\t:\tSpawnScripts/Commonlands/JPFeterman.lua", lua);
+        Assert.Contains("local AHuntersTool = 9001", lua);
+        Assert.Contains("ProvidesQuest(NPC, AHuntersTool)", lua);
+        Assert.Contains("function hailed(NPC, Spawn)", lua);
+        Assert.Contains("function casted_on(Target, Caster, SpellName)", lua);
+        Assert.Contains("function used(NPC, Spawn, SpellName)", lua);
+        Assert.Contains("function examined(NPC, Spawn)", lua);
+        Assert.Contains("OfferQuest(nil, Player, AHuntersTool)", lua);
+        Assert.Contains("CanOfferAHuntersTool", lua);
+    }
+
+    [Fact]
     public void SqlGeneratorWritesProposedQuestAndMissingTemplates()
     {
         var spec = BuildResolvedSpec();
@@ -253,6 +330,7 @@ public sealed class QuestParserCoreTests
     public void UtilityNormalizesPathsAndSplitsCoin()
     {
         Assert.Equal("a_hunters_tool.lua", Utilities.NormalizeQuestFileName("A Hunter's Tool"));
+        Assert.Equal("JPFeterman.example.lua", Utilities.NormalizeSpawnScriptExampleFileName("J.P. Feterman"));
         Assert.Equal((91, 21, 0, 0), Utilities.SplitCoin(2191));
     }
 
@@ -418,6 +496,66 @@ public sealed class QuestParserCoreTests
             { "name": "wanted poster", "quest_list": [{ "id": 2491014808 }], "id": 331030 }
           ],
           "returned": 1
+        }
+        """;
+
+    internal static string SampleSelectableRewardQuestJson() => """
+        {
+          "quest_list": [
+            {
+              "category": "Thundering Steppes",
+              "name": "Slay the Revenant Soldiers",
+              "level": 23,
+              "scales_with_level": 0,
+              "is_tradeskill": 0,
+              "crc": 3638274690,
+              "completion_text": "I have slain the revenant soldiers.",
+              "shareable": 1,
+              "starter_text": "I found a journal.",
+              "complete_shareable": 1,
+              "tier": 9,
+              "repeatable": 0,
+              "id": 3638274690,
+              "stage_list": [
+                {
+                  "num": 0,
+                  "starter_text_list": ["I need to slay them."],
+                  "completion_text_list": ["I have slain them."],
+                  "branch_list": [
+                    { "quota_min": -1, "description": "I need to slay fifteen revenant soldiers in the Thundering Steppes.", "quota_max": 15, "completion_zone": "zones/steppes", "completed_text": "I have slain the revenant soldiers.", "icon_name": "", "icon_id": 611 }
+                  ]
+                }
+              ],
+              "reward_list": [
+                {
+                  "coin_min": 11053,
+                  "coin_max": 9765,
+                  "exp": 358.913591,
+                  "item_list": [],
+                  "selected_item_list": [
+                    { "id": 2309818981, "quantity": 1 },
+                    { "id": 1375427748, "quantity": 1 },
+                    { "id": 3635146300, "quantity": 1 },
+                    { "id": 4048671300, "quantity": 1 }
+                  ],
+                  "factionchange_list": []
+                }
+              ]
+            }
+          ],
+          "returned": 1
+        }
+        """;
+
+    internal static string SampleRewardItemJson() => """
+        {
+          "item_list": [
+            { "itemlevel": 20, "visible": 1, "displayname": "Band of Unimaginable Power", "id": 2309818981 },
+            { "itemlevel": 20, "visible": 1, "displayname": "Loop of Unimaginable Power", "id": 1375427748 },
+            { "itemlevel": 20, "visible": 1, "displayname": "Ringlet of Unimaginable Power", "id": 3635146300 },
+            { "itemlevel": 20, "visible": 1, "displayname": "Ring of Unimaginable Power", "id": 4048671300 }
+          ],
+          "returned": 4
         }
         """;
 

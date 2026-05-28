@@ -34,7 +34,7 @@ public sealed class QuestSpecFactory
             Giver = string.IsNullOrWhiteSpace(primaryGiver)
                 ? ResolvedReference.Missing("npc", "")
                 : ResolvedReference.Missing("npc", primaryGiver),
-            Output = BuildOutputPaths(resolvedContentRoot, quest.Category, quest.Name)
+            Output = BuildOutputPaths(resolvedContentRoot, quest.Category, quest.Name, primaryGiver)
         };
         AddQuestProvenance(spec);
 
@@ -93,13 +93,10 @@ public sealed class QuestSpecFactory
             spec.Rewards.CoinMin = reward.CoinMin;
             spec.Rewards.CoinMax = reward.CoinMax;
             spec.Rewards.Experience = reward.Experience;
-            spec.Rewards.Items = reward.ItemList.Select(item => new RewardItemSpec
-            {
-                Quantity = item.Quantity <= 0 ? 1 : item.Quantity,
-                Item = item.Id > 0
-                    ? ResolvedReference.Resolved("item", item.Name, item.Id, item.Name, source: "Census reward item id")
-                    : ResolvedReference.Missing("item", item.Name)
-            }).ToList();
+            spec.Rewards.Items = reward.ItemList
+                .Select(item => CreateRewardItem(item, isSelectable: false, import.RewardItems))
+                .Concat(reward.SelectedItemList.Select(item => CreateRewardItem(item, isSelectable: true, import.RewardItems)))
+                .ToList();
             spec.Rewards.Factions = reward.FactionChangeList.Select(faction => new RewardFactionSpec
             {
                 Amount = faction.Amount,
@@ -113,11 +110,12 @@ public sealed class QuestSpecFactory
         return spec;
     }
 
-    public static OutputPaths BuildOutputPaths(string contentRoot, string zone, string questName)
+    public static OutputPaths BuildOutputPaths(string contentRoot, string zone, string questName, string questGiverName = "")
     {
         var questDirectory = Path.Combine(contentRoot, "Quests", Utilities.SafeDirectoryName(zone));
         var luaFile = Utilities.NormalizeQuestFileName(questName);
         var specFile = Utilities.NormalizeSpecFileName(questName);
+        var spawnName = string.IsNullOrWhiteSpace(questGiverName) ? "Quest Giver" : questGiverName;
         return new OutputPaths
         {
             ContentRoot = contentRoot,
@@ -126,7 +124,8 @@ public sealed class QuestSpecFactory
             SpecPath = Path.Combine(questDirectory, specFile),
             SqlPath = Path.Combine(questDirectory, Utilities.NormalizeSqlFileName(questName)),
             MissingReportPath = Path.Combine(questDirectory, Utilities.NormalizeMissingReportFileName(questName)),
-            PreviewPath = Utilities.RuntimePath("output", "preview", luaFile)
+            PreviewPath = Utilities.RuntimePath("output", "preview", luaFile),
+            SpawnScriptPath = SpawnScriptGenerator.BuildExamplePath(contentRoot, zone, spawnName)
         };
     }
 
@@ -236,6 +235,57 @@ public sealed class QuestSpecFactory
         spec.Provenance[$"step.{step.Number}.iconName"] = source;
         spec.Provenance[$"step.{step.Number}.completionZone"] = source;
         spec.Provenance[$"step.{step.Number}.searchText"] = "Generated search text from Census branch/icon";
+    }
+
+    private static RewardItemSpec CreateRewardItem(
+        CensusRewardItem item,
+        bool isSelectable,
+        IReadOnlyDictionary<long, CensusItem>? itemDetails)
+    {
+        itemDetails ??= new Dictionary<long, CensusItem>();
+        itemDetails.TryGetValue(item.Id, out var censusItem);
+
+        var displayName = FirstNonBlank(item.Name, item.DisplayName, censusItem?.DisplayName, censusItem?.Name);
+        var query = !string.IsNullOrWhiteSpace(displayName)
+            ? displayName
+            : item.Id > 0
+                ? item.Id.ToString()
+                : "";
+
+        var reference = ResolvedReference.Missing("item", query);
+        reference.Name = displayName;
+        reference.Source = RewardItemSource(item, isSelectable, !string.IsNullOrWhiteSpace(displayName));
+        if (item.Id > 0)
+            reference.Metadata["census_id"] = item.Id.ToString();
+
+        if (censusItem is not null)
+        {
+            if (censusItem.ItemLevel > 0)
+                reference.Metadata["census_itemlevel"] = censusItem.ItemLevel.ToString();
+            reference.Metadata["census_visible"] = censusItem.Visible.ToString();
+        }
+
+        return new RewardItemSpec
+        {
+            Quantity = item.Quantity <= 0 ? 1 : item.Quantity,
+            IsSelectable = isSelectable,
+            Item = reference
+        };
+    }
+
+    private static string RewardItemSource(CensusRewardItem item, bool isSelectable, bool foundCensusDetails)
+    {
+        var rewardKind = isSelectable ? "selectable reward item" : "reward item";
+        if (item.Id <= 0)
+            return $"Census {rewardKind}; DB resolution pending";
+        if (foundCensusDetails)
+            return $"Census {rewardKind} id {item.Id}; DB resolution pending";
+        return $"Census {rewardKind} id {item.Id}; item census details not found";
+    }
+
+    private static string FirstNonBlank(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
     }
 
     private static void AddRewardProvenance(QuestSpec spec)

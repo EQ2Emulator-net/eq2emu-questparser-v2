@@ -172,7 +172,7 @@ public sealed class SqlReportGenerator
         if (spec.Giver.Id is not long giverId)
             return;
 
-        var script = Path.Combine("SpawnScripts", Utilities.SafeDirectoryName(spec.Quest.Zone), $"{Utilities.IdentifierFromName(spec.Giver.Name.Length > 0 ? spec.Giver.Name : spec.Giver.Query)}.lua").Replace('\\', '/');
+        var script = SpawnScriptGenerator.BuildLiveScriptRelativePath(spec);
         writer.AppendLine();
         writer.AppendLine("-- Optional quest giver spawn script mapping");
         writer.AppendLine($"""

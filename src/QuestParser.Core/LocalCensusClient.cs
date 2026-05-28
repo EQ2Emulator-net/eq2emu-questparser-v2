@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace QuestParser.Core;
 
 public sealed class LocalCensusClient : ICensusClient
@@ -23,11 +25,12 @@ public sealed class LocalCensusClient : ICensusClient
         var giverPath = FindRequiredFile(QuestGiverFileCandidates(questName, quest.Id), "questgiver", questName);
         var giverRaw = await File.ReadAllTextAsync(giverPath, cancellationToken).ConfigureAwait(false);
         var givers = CensusClient.ReadQuestGiversFromJson(giverRaw, quest.Id);
+        var rewardItems = await ReadRewardItemsAsync(quest, cancellationToken).ConfigureAwait(false);
 
         await CensusClient.WriteCachedQuestJsonAsync(_cacheDirectory, questName, questRaw, cancellationToken).ConfigureAwait(false);
         await CensusClient.WriteCachedQuestGiverJsonAsync(_cacheDirectory, questName, giverRaw, cancellationToken).ConfigureAwait(false);
 
-        return new CensusQuestImport(quest, givers);
+        return new CensusQuestImport(quest, givers, rewardItems);
     }
 
     private IEnumerable<string> QuestFileCandidates(string questName)
@@ -50,6 +53,30 @@ public sealed class LocalCensusClient : ICensusClient
         yield return Path.Combine(_sourceDirectory, "questgiver.json");
     }
 
+    private async Task<IReadOnlyDictionary<long, CensusItem>> ReadRewardItemsAsync(CensusQuest quest, CancellationToken cancellationToken)
+    {
+        var ids = CensusClient.RewardItemIds(quest).ToHashSet();
+        if (ids.Count == 0)
+            return new Dictionary<long, CensusItem>();
+
+        var itemPath = FindOptionalFile(ItemFileCandidates());
+        if (itemPath is null)
+            return new Dictionary<long, CensusItem>();
+
+        await using var stream = File.OpenRead(itemPath);
+        var response = await JsonSerializer.DeserializeAsync(stream, CensusJsonContext.Default.CensusItemResponse, cancellationToken).ConfigureAwait(false) ?? new();
+        return response.ItemList
+            .Where(item => ids.Contains(item.Id))
+            .GroupBy(item => item.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+    }
+
+    private IEnumerable<string> ItemFileCandidates()
+    {
+        yield return Path.Combine(_sourceDirectory, "item.json");
+        yield return Path.Combine(_sourceDirectory, "items.json");
+    }
+
     private string FindRequiredFile(IEnumerable<string> candidates, string kind, string questName)
     {
         var checkedPaths = new List<string>();
@@ -62,5 +89,10 @@ public sealed class LocalCensusClient : ICensusClient
 
         throw new FileNotFoundException(
             $"Local Census source could not find {kind} JSON for '{questName}'. Checked: {string.Join(", ", checkedPaths)}");
+    }
+
+    private static string? FindOptionalFile(IEnumerable<string> candidates)
+    {
+        return candidates.FirstOrDefault(File.Exists);
     }
 }

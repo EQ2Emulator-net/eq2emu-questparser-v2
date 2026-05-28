@@ -99,7 +99,7 @@ public sealed class MissingQuestDatabaseResolver : IQuestDatabaseResolver
         }
 
         foreach (var reward in spec.Rewards.Items.Where(item => !HasResolvedOrProposedId(item.Item) && !string.IsNullOrWhiteSpace(item.Item.Query)))
-            reward.Item = Missing("item", reward.Item.Query);
+            reward.Item = ResolvedReferenceContext.Preserve(reward.Item, Missing("item", reward.Item.Query));
         foreach (var reward in spec.Rewards.Factions.Where(faction => !HasResolvedOrProposedId(faction.Faction) && !string.IsNullOrWhiteSpace(faction.Faction.Query)))
             reward.Faction = Missing("faction", reward.Faction.Query);
 
@@ -295,7 +295,7 @@ public sealed class MariaDbQuestDatabaseResolver : IQuestDatabaseResolver
         }
 
         foreach (var reward in spec.Rewards.Items.Where(item => item.Item.Status != ResolveStatus.Resolved && !string.IsNullOrWhiteSpace(item.Item.Query)))
-            reward.Item = await ResolveItemAsync(connection, reward.Item.Query, cancellationToken).ConfigureAwait(false);
+            reward.Item = ResolvedReferenceContext.Preserve(reward.Item, await ResolveItemAsync(connection, reward.Item.Query, cancellationToken).ConfigureAwait(false));
 
         foreach (var reward in spec.Rewards.Factions.Where(faction => faction.Faction.Status != ResolveStatus.Resolved && !string.IsNullOrWhiteSpace(faction.Faction.Query)))
             reward.Faction = await ResolveFactionAsync(connection, reward.Faction.Query, cancellationToken).ConfigureAwait(false);
@@ -589,11 +589,11 @@ public sealed class MariaDbQuestDatabaseResolver : IQuestDatabaseResolver
         command.Parameters.AddWithValue("@zone", zone);
         command.Parameters.AddWithValue("@like", $"%{query}%");
 
-        var candidates = new Dictionary<int, ResolveCandidate>();
+        var candidates = new Dictionary<long, ResolveCandidate>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var id = reader.GetInt32(reader.GetOrdinal("id"));
+            var id = Convert.ToInt64(reader["id"], System.Globalization.CultureInfo.InvariantCulture);
             if (!candidates.TryGetValue(id, out var candidate))
             {
                 candidate = new ResolveCandidate

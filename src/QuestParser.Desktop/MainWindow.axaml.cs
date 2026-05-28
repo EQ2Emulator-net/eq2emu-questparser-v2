@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private QuestParserUiSettings _settings = QuestParserUiSettings.Load();
     private bool _loadingSection;
     private bool _refreshingSectionList;
+    private bool _selectingSection;
     private bool _busy;
 
     public MainWindow()
@@ -65,8 +66,14 @@ public partial class MainWindow : Window
 
         SectionList.SelectionChanged += (_, _) =>
         {
-            if (!_refreshingSectionList && SectionList.SelectedIndex >= 0)
-                SelectSection(SectionList.SelectedIndex);
+            if (_refreshingSectionList || _selectingSection || SectionList.SelectedIndex < 0)
+                return;
+
+            var selectedIndex = SectionList.SelectedIndex;
+            if (selectedIndex == CurrentSectionIndex())
+                return;
+
+            SelectSectionFromSidebar(selectedIndex);
         };
 
         CandidateList.SelectionChanged += (_, _) => RefreshActionStates();
@@ -223,7 +230,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        AppendLog("Generating Lua, SQL, spec, and missing-data report from verified UI values.");
+        AppendLog("Generating quest Lua, spawn-starter example, SQL, spec, and missing-data report from verified UI values.");
         var result = await _workflow.GenerateFromSpecAsync(_spec, OverwriteBox.IsChecked == true);
         _spec = result.Spec;
         RefreshPreview();
@@ -337,6 +344,7 @@ public partial class MainWindow : Window
             SectionLuaBox,
             MissingSpawnBox,
             LuaPreviewBox,
+            SpawnScriptPreviewBox,
             SqlPreviewBox,
             MissingPreviewBox,
             SpecPreviewBox,
@@ -389,6 +397,7 @@ public partial class MainWindow : Window
             EditorHost.Children.Clear();
             SectionLuaBox.Text = "";
             LuaPreviewBox.Text = "";
+            SpawnScriptPreviewBox.Text = "";
             SqlPreviewBox.Text = "";
             MissingPreviewBox.Text = "";
             SpecPreviewBox.Text = "";
@@ -439,11 +448,33 @@ public partial class MainWindow : Window
         if (_spec is null || index < 0 || index >= _sections.Count)
             return;
 
-        if (!_loadingSection)
-            SaveCurrentSection();
+        _selectingSection = true;
+        try
+        {
+            if (!_loadingSection)
+                SaveCurrentSection();
 
-        RefreshSectionList(index);
-        LoadSection(_sections[index]);
+            SetSelectedSectionIndex(index);
+            LoadSection(_sections[index]);
+        }
+        finally
+        {
+            _selectingSection = false;
+        }
+    }
+
+    private void SelectSectionFromSidebar(int index)
+    {
+        try
+        {
+            SelectSection(index);
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Section selection failed.");
+            AppendLog(ex.ToString());
+            SetSelectedSectionIndex(CurrentSectionIndex());
+        }
     }
 
     private void SelectSectionByKey(string sectionKey)
@@ -462,15 +493,48 @@ public partial class MainWindow : Window
 
     private void RefreshSectionList(int selectedIndex)
     {
+        var wasRefreshing = _refreshingSectionList;
         _refreshingSectionList = true;
-        _sectionRows.Clear();
-        foreach (var section in _sections)
-            _sectionRows.Add(new SectionDisplay(_verifiedSections.Contains(section.Key), section.Label));
+        try
+        {
+            _sectionRows.Clear();
+            foreach (var section in _sections)
+                _sectionRows.Add(new SectionDisplay(_verifiedSections.Contains(section.Key), section.Label));
 
-        SectionList.SelectedIndex = selectedIndex >= 0 && selectedIndex < _sections.Count ? selectedIndex : -1;
-        _refreshingSectionList = false;
+            SetSelectedSectionIndex(selectedIndex);
+        }
+        finally
+        {
+            _refreshingSectionList = wasRefreshing;
+        }
         UpdateProgressText();
         RefreshActionStates();
+    }
+
+    private void SetSelectedSectionIndex(int selectedIndex)
+    {
+        var boundedIndex = selectedIndex >= 0 && selectedIndex < _sections.Count ? selectedIndex : -1;
+        if (SectionList.SelectedIndex == boundedIndex)
+            return;
+
+        var wasRefreshing = _refreshingSectionList;
+        _refreshingSectionList = true;
+        try
+        {
+            SectionList.SelectedIndex = boundedIndex;
+        }
+        finally
+        {
+            _refreshingSectionList = wasRefreshing;
+        }
+    }
+
+    private int CurrentSectionIndex()
+    {
+        if (_currentSection is null)
+            return -1;
+
+        return _sections.FindIndex(section => section.Equals(_currentSection));
     }
 
     private void LoadSection(ReviewSection section)
@@ -479,40 +543,46 @@ public partial class MainWindow : Window
             return;
 
         _loadingSection = true;
-        _currentSection = section;
-        _editors.Clear();
-        _sourceRows.Clear();
-        _candidateRows.Clear();
-        EditorHost.Children.Clear();
-        MissingSpawnBox.Text = "Missing NPC guidance appears here when the current DB reference is a missing NPC.";
-
-        SectionTitleText.Text = section.Label;
-        SectionHelpText.Text = "Review the source values, DB resolution, generated Lua, and editable spec fields. Verify the section after the values are correct.";
-
-        switch (section.Kind)
+        try
         {
-            case ReviewSectionKind.Quest:
-                LoadQuestSection();
-                break;
-            case ReviewSectionKind.Giver:
-                LoadGiverSection();
-                break;
-            case ReviewSectionKind.Stage:
-                LoadStageSection(section);
-                break;
-            case ReviewSectionKind.Step:
-                LoadStepSection(section);
-                break;
-            case ReviewSectionKind.Rewards:
-                LoadRewardsSection();
-                break;
-            case ReviewSectionKind.Output:
-                LoadOutputSection();
-                break;
-        }
+            _currentSection = section;
+            _editors.Clear();
+            _sourceRows.Clear();
+            _candidateRows.Clear();
+            EditorHost.Children.Clear();
+            MissingSpawnBox.Text = "Missing NPC guidance appears here when the current DB reference is a missing NPC.";
 
-        LoadCandidatesForCurrentSection();
-        _loadingSection = false;
+            SectionTitleText.Text = section.Label;
+            SectionHelpText.Text = "Review the source values, DB resolution, generated Lua, and editable spec fields. Verify the section after the values are correct.";
+
+            switch (section.Kind)
+            {
+                case ReviewSectionKind.Quest:
+                    LoadQuestSection();
+                    break;
+                case ReviewSectionKind.Giver:
+                    LoadGiverSection();
+                    break;
+                case ReviewSectionKind.Stage:
+                    LoadStageSection(section);
+                    break;
+                case ReviewSectionKind.Step:
+                    LoadStepSection(section);
+                    break;
+                case ReviewSectionKind.Rewards:
+                    LoadRewardsSection();
+                    break;
+                case ReviewSectionKind.Output:
+                    LoadOutputSection();
+                    break;
+            }
+
+            LoadCandidatesForCurrentSection();
+        }
+        finally
+        {
+            _loadingSection = false;
+        }
         RefreshPreview();
         RefreshActionStates();
     }
@@ -707,11 +777,13 @@ public partial class MainWindow : Window
             ("Content root", spec.Output.ContentRoot),
             ("Quest directory", spec.Output.QuestDirectory),
             ("Lua path", spec.Output.LuaPath),
+            ("Spawn script example path", spec.Output.SpawnScriptPath),
             ("Spec path", spec.Output.SpecPath),
             ("SQL path", spec.Output.SqlPath),
             ("Missing report path", spec.Output.MissingReportPath),
             ("Runtime preview path", spec.Output.PreviewPath),
             ("Lua written", spec.Generation.LuaWritten),
+            ("Spawn script written", spec.Generation.SpawnScriptWritten),
             ("Spec written", spec.Generation.SpecWritten),
             ("SQL written", spec.Generation.SqlWritten),
             ("Missing report written", spec.Generation.MissingReportWritten));
@@ -720,6 +792,7 @@ public partial class MainWindow : Window
         AddTextEditor("output.contentRoot", "Content root", spec.Output.ContentRoot);
         AddTextEditor("output.questDirectory", "Quest directory", spec.Output.QuestDirectory);
         AddTextEditor("output.lua", "Lua path", spec.Output.LuaPath);
+        AddTextEditor("output.spawnScript", "Spawn script example path", spec.Output.SpawnScriptPath);
         AddTextEditor("output.spec", "Spec JSON path", spec.Output.SpecPath);
         AddTextEditor("output.sql", "SQL path", spec.Output.SqlPath);
         AddTextEditor("output.missing", "Missing report path", spec.Output.MissingReportPath);
@@ -847,6 +920,7 @@ public partial class MainWindow : Window
         spec.Output.ContentRoot = ReadText("output.contentRoot");
         spec.Output.QuestDirectory = ReadText("output.questDirectory");
         spec.Output.LuaPath = ReadText("output.lua");
+        spec.Output.SpawnScriptPath = ReadText("output.spawnScript");
         spec.Output.SpecPath = ReadText("output.spec");
         spec.Output.SqlPath = ReadText("output.sql");
         spec.Output.MissingReportPath = ReadText("output.missing");
@@ -956,6 +1030,7 @@ public partial class MainWindow : Window
         if (_spec is null)
         {
             LuaPreviewBox.Text = "";
+            SpawnScriptPreviewBox.Text = "";
             SqlPreviewBox.Text = "";
             MissingPreviewBox.Text = "";
             SpecPreviewBox.Text = "";
@@ -968,6 +1043,7 @@ public partial class MainWindow : Window
         {
             var preview = _workflow.Preview(_spec);
             LuaPreviewBox.Text = preview.Lua;
+            SpawnScriptPreviewBox.Text = preview.SpawnScript;
             SqlPreviewBox.Text = preview.Sql;
             MissingPreviewBox.Text = preview.MissingReport;
             SpecPreviewBox.Text = JsonSerializer.Serialize(_spec, QuestSpecJsonContext.Default.QuestSpec);

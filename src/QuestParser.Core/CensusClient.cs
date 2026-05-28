@@ -44,7 +44,8 @@ public sealed class CensusClient : ICensusClient
         var giverRaw = await GetStringAsync(giverUri, cancellationToken).ConfigureAwait(false);
         await WriteCachedQuestGiverJsonAsync(_cacheDirectory, questName, giverRaw, cancellationToken).ConfigureAwait(false);
 
-        return new CensusQuestImport(quest, ReadQuestGiversFromJson(giverRaw, quest.Id));
+        var rewardItems = await FetchRewardItemsAsync(quest, cancellationToken).ConfigureAwait(false);
+        return new CensusQuestImport(quest, ReadQuestGiversFromJson(giverRaw, quest.Id), rewardItems);
     }
 
     public static Uri BuildQuestUri(string questName, string? baseUrl = null, string? serviceId = null, bool includeServiceId = true)
@@ -56,6 +57,13 @@ public sealed class CensusClient : ICensusClient
     public static Uri BuildQuestGiverUri(long censusQuestId, string? baseUrl = null, string? serviceId = null, bool includeServiceId = true)
     {
         return new Uri($"{EndpointRoot(baseUrl, serviceId, includeServiceId)}/get/eq2/questgiver?quest_list.id={censusQuestId}&c:limit=25");
+    }
+
+    public static Uri BuildItemUri(IEnumerable<long> itemIds, string? baseUrl = null, string? serviceId = null, bool includeServiceId = true)
+    {
+        var ids = string.Join(",", itemIds.Where(id => id > 0).Distinct().Order());
+        var showFields = "id,displayname,itemlevel,visible,ts,last_update";
+        return new Uri($"{EndpointRoot(baseUrl, serviceId, includeServiceId)}/get/eq2/item?id={ids}&c:limit=100&c:show={showFields}");
     }
 
     public static string QuestJsonFileName(string questName)
@@ -120,6 +128,41 @@ public sealed class CensusClient : ICensusClient
         return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task<IReadOnlyDictionary<long, CensusItem>> FetchRewardItemsAsync(CensusQuest quest, CancellationToken cancellationToken)
+    {
+        var ids = RewardItemIds(quest).ToArray();
+        if (ids.Length == 0)
+            return new Dictionary<long, CensusItem>();
+
+        var items = new Dictionary<long, CensusItem>();
+        foreach (var batch in ids.Chunk(100))
+        {
+            try
+            {
+                var raw = await GetStringAsync(BuildItemUri(batch, _baseUrl, _serviceId, _includeServiceId), cancellationToken).ConfigureAwait(false);
+                var response = JsonSerializer.Deserialize(raw, CensusJsonContext.Default.CensusItemResponse) ?? new();
+                foreach (var item in response.ItemList.Where(item => item.Id > 0))
+                    items[item.Id] = item;
+            }
+            catch
+            {
+                // Item details are enrichment only. Preserve reward IDs when the configured Census source lacks item data.
+            }
+        }
+
+        return items;
+    }
+
+    internal static IEnumerable<long> RewardItemIds(CensusQuest quest)
+    {
+        return quest.RewardList
+            .SelectMany(reward => reward.ItemList.Concat(reward.SelectedItemList))
+            .Select(item => item.Id)
+            .Where(id => id > 0)
+            .Distinct()
+            .Order();
+    }
+
     private static string NormalizeBaseUrl(string? baseUrl)
     {
         return (string.IsNullOrWhiteSpace(baseUrl) ? Defaults.CensusBaseUrl : baseUrl).TrimEnd('/');
@@ -143,4 +186,7 @@ public sealed class CensusClient : ICensusClient
     }
 }
 
-public sealed record CensusQuestImport(CensusQuest Quest, IReadOnlyList<CensusQuestGiver> QuestGivers);
+public sealed record CensusQuestImport(
+    CensusQuest Quest,
+    IReadOnlyList<CensusQuestGiver> QuestGivers,
+    IReadOnlyDictionary<long, CensusItem>? RewardItems = null);

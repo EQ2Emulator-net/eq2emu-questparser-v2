@@ -24,7 +24,7 @@ public sealed class QuestTemplateFactory
             },
             QuestId = ResolvedReference.Missing("quest", cleanQuestName),
             Giver = ResolvedReference.Missing("npc", "TODO quest giver"),
-            Output = QuestSpecFactory.BuildOutputPaths(resolvedContentRoot, cleanZone, cleanQuestName)
+            Output = QuestSpecFactory.BuildOutputPaths(resolvedContentRoot, cleanZone, cleanQuestName, "TODO quest giver")
         };
 
         spec.QuestGivers.Add("TODO quest giver");

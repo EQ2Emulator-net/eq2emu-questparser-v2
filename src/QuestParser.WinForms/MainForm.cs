@@ -130,7 +130,7 @@ public sealed class MainForm : Form
         _contentRootBox.Dock = DockStyle.Fill;
         _contentRootBox.Text = Defaults.ContentRoot;
 
-        _overwriteBox.Text = "Overwrite Lua";
+        _overwriteBox.Text = "Overwrite files";
         _overwriteBox.AutoSize = true;
         _overwriteBox.Anchor = AnchorStyles.Left;
 
@@ -905,11 +905,13 @@ public sealed class MainForm : Form
             ("Content root", spec.Output.ContentRoot),
             ("Quest directory", spec.Output.QuestDirectory),
             ("Lua path", spec.Output.LuaPath),
+            ("Spawn script example path", spec.Output.SpawnScriptPath),
             ("Spec path", spec.Output.SpecPath),
             ("SQL path", spec.Output.SqlPath),
             ("Missing report path", spec.Output.MissingReportPath),
             ("Runtime preview path", spec.Output.PreviewPath),
             ("Lua written", spec.Generation.LuaWritten),
+            ("Spawn script written", spec.Generation.SpawnScriptWritten),
             ("Spec written", spec.Generation.SpecWritten),
             ("SQL written", spec.Generation.SqlWritten),
             ("Missing report written", spec.Generation.MissingReportWritten));
@@ -919,6 +921,7 @@ public sealed class MainForm : Form
         AddTextEditor(table, "output.contentRoot", "Content root", spec.Output.ContentRoot);
         AddTextEditor(table, "output.questDirectory", "Quest directory", spec.Output.QuestDirectory);
         AddTextEditor(table, "output.lua", "Lua path", spec.Output.LuaPath);
+        AddTextEditor(table, "output.spawnScript", "Spawn script example path", spec.Output.SpawnScriptPath);
         AddTextEditor(table, "output.spec", "Spec JSON path", spec.Output.SpecPath);
         AddTextEditor(table, "output.sql", "SQL path", spec.Output.SqlPath);
         AddTextEditor(table, "output.missing", "Missing report path", spec.Output.MissingReportPath);
@@ -1054,6 +1057,7 @@ public sealed class MainForm : Form
         spec.Output.ContentRoot = ReadText("output.contentRoot");
         spec.Output.QuestDirectory = ReadText("output.questDirectory");
         spec.Output.LuaPath = ReadText("output.lua");
+        spec.Output.SpawnScriptPath = ReadText("output.spawnScript");
         spec.Output.SpecPath = ReadText("output.spec");
         spec.Output.SqlPath = ReadText("output.sql");
         spec.Output.MissingReportPath = ReadText("output.missing");

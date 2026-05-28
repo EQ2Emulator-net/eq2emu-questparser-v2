@@ -29,6 +29,7 @@ public sealed class CliSmokeTests
             Assert.True(File.Exists(Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.quest.json")));
             Assert.True(File.Exists(Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.quest.sql")));
             Assert.True(File.Exists(Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.missing.md")));
+            Assert.True(File.Exists(Path.Combine(tempRoot, "SpawnScripts", "Commonlands", "JPFeterman.example.lua")));
         }
         finally
         {

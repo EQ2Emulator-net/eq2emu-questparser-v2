@@ -25,28 +25,26 @@ public sealed class SqlReportGenerator
         var shareableFlag = spec.Quest.Shareable ? 1 : 0;
         var level = spec.Quest.Level;
 
-        if (spec.QuestId.Status == ResolveStatus.Proposed)
-        {
-            writer.AppendLine("-- Proposed quest row");
-            writer.AppendLine($"""
-                INSERT INTO quests (quest_id, name, type, zone, level, enc_level, description, spawn_id, completed_text, lua_script, shareable_flag)
-                VALUES ({questId}, {Utilities.SqlString(spec.Quest.Name)}, 'Solo', {Utilities.SqlString(spec.Quest.Zone)}, {level}, {level}, {Utilities.SqlString(spec.Quest.StarterText)}, {giverId}, {Utilities.SqlString(spec.Quest.CompletionText)}, {Utilities.SqlString(luaScript)}, {shareableFlag});
-                """);
-        }
-        else
-        {
-            writer.AppendLine("-- Existing quest row update preview");
-            writer.AppendLine($"""
-                UPDATE quests
-                SET description = {Utilities.SqlString(spec.Quest.StarterText)},
-                    completed_text = {Utilities.SqlString(spec.Quest.CompletionText)},
-                    lua_script = {Utilities.SqlString(luaScript)},
-                    spawn_id = {giverId},
-                    shareable_flag = {shareableFlag}
-                WHERE quest_id = {questId};
-                """);
-        }
+        writer.AppendLine(spec.QuestId.Status == ResolveStatus.Proposed
+            ? "-- Proposed quest row"
+            : "-- Quest row upsert");
+        writer.AppendLine($"""
+            INSERT INTO quests (quest_id, name, type, zone, level, enc_level, description, spawn_id, completed_text, lua_script, shareable_flag)
+            VALUES ({questId}, {Utilities.SqlString(spec.Quest.Name)}, 'Solo', {Utilities.SqlString(spec.Quest.Zone)}, {level}, {level}, {Utilities.SqlString(spec.Quest.StarterText)}, {giverId}, {Utilities.SqlString(spec.Quest.CompletionText)}, {Utilities.SqlString(luaScript)}, {shareableFlag})
+            ON DUPLICATE KEY UPDATE
+                name = VALUES(name),
+                type = VALUES(type),
+                zone = VALUES(zone),
+                level = VALUES(level),
+                enc_level = VALUES(enc_level),
+                description = VALUES(description),
+                spawn_id = VALUES(spawn_id),
+                completed_text = VALUES(completed_text),
+                lua_script = VALUES(lua_script),
+                shareable_flag = VALUES(shareable_flag);
+            """);
 
+        WriteGeneratedRewardItems(writer, spec);
         WriteQuestDetails(writer, spec, questId);
         WriteSpawnScript(writer, spec);
         WriteMissingSpawnTemplates(writer, spec);
@@ -93,10 +91,18 @@ public sealed class SqlReportGenerator
 
     private static void WriteQuestDetails(StringBuilder writer, QuestSpec spec, long questId)
     {
-        if (spec.Rewards.CoinMin > 0)
+        if (spec.Rewards.CoinMin > 0
+            || spec.Rewards.CoinMax > 0
+            || spec.Rewards.Experience > 0
+            || spec.Rewards.Items.Any(item => item.Item.Id.HasValue)
+            || spec.Rewards.Factions.Any(faction => faction.Amount != 0 && faction.Faction.Id.HasValue))
         {
             writer.AppendLine();
             writer.AppendLine("-- Static rewards loaded by WorldDatabase::LoadQuestDetails");
+        }
+
+        if (spec.Rewards.CoinMin > 0)
+        {
             writer.AppendLine($"""
                 INSERT IGNORE INTO quest_details (quest_id, type, subtype, value, faction_id, quantity)
                 VALUES ({questId}, 'Reward', 'Coin', {spec.Rewards.CoinMin}, 0, 0);
@@ -130,13 +136,63 @@ public sealed class SqlReportGenerator
                 """);
         }
 
-        foreach (var faction in spec.Rewards.Factions.Where(faction => faction.Faction.Id.HasValue))
+        foreach (var faction in spec.Rewards.Factions.Where(faction => faction.Amount != 0 && faction.Faction.Id.HasValue))
         {
             writer.AppendLine($"""
                 INSERT IGNORE INTO quest_details (quest_id, type, subtype, value, faction_id, quantity)
                 VALUES ({questId}, 'Reward', 'Faction', {faction.Amount}, {faction.Faction.Id}, 0);
                 """);
         }
+
+        foreach (var item in spec.Rewards.Items.Where(item => !item.Item.Id.HasValue))
+            writer.AppendLine($"-- TODO DB: Reward item '{item.Item.Query}' needs an items.id before a quest_details row can be generated.");
+
+        foreach (var faction in spec.Rewards.Factions.Where(faction => faction.Amount != 0 && !faction.Faction.Id.HasValue))
+            writer.AppendLine($"-- TODO DB: Reward faction '{faction.Faction.Query}' needs a factions.id before a quest_details row can be generated.");
+    }
+
+    private static void WriteGeneratedRewardItems(StringBuilder writer, QuestSpec spec)
+    {
+        var generatedItems = spec.Rewards.Items
+            .Where(item => item.Item.Id.HasValue && IsGeneratedRewardItem(item.Item))
+            .GroupBy(item => item.Item.Id!.Value)
+            .Select(group => group.First().Item)
+            .ToList();
+
+        if (generatedItems.Count == 0)
+            return;
+
+        writer.AppendLine();
+        writer.AppendLine("-- Generated placeholder items for reward rows. Replace with full item data when available.");
+        foreach (var item in generatedItems)
+        {
+            var censusId = item.Metadata.TryGetValue("census_id", out var value) ? value : item.Query;
+            var soeItemIdUnsigned = uint.TryParse(censusId, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+                ? parsed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : "0";
+            var name = Truncate(string.IsNullOrWhiteSpace(item.Name) ? "Generated Reward Item " + censusId : item.Name, 100);
+            var description = "Generated placeholder reward item"
+                + (string.IsNullOrWhiteSpace(censusId) ? "." : " for Census item id " + censusId + ".");
+
+            writer.AppendLine($"""
+                INSERT INTO items (id, name, item_type, soe_item_id_unsigned, description)
+                VALUES ({item.Id}, {Utilities.SqlString(name)}, 'Normal', {soeItemIdUnsigned}, {Utilities.SqlString(description)})
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    soe_item_id_unsigned = VALUES(soe_item_id_unsigned),
+                    description = VALUES(description);
+                """);
+        }
+    }
+
+    private static bool IsGeneratedRewardItem(ResolvedReference reference)
+    {
+        return reference.Source.Contains("Generated final reward item id", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        return value.Length <= maxLength ? value : value[..maxLength];
     }
 
     private static void WriteQuestDetailsPreview(StringBuilder writer, QuestSpec spec)

@@ -482,9 +482,24 @@ public sealed class MariaDbQuestDatabaseResolver : IQuestDatabaseResolver
         return fuzzyResult;
     }
 
-    private static Task<ResolvedReference> ResolveItemAsync(MySqlConnection connection, string query, CancellationToken cancellationToken)
+    private static async Task<ResolvedReference> ResolveItemAsync(MySqlConnection connection, string query, CancellationToken cancellationToken)
     {
-        return ResolveSimpleAsync(connection, "item", query, "items", "id", "name", "item_type", cancellationToken);
+        if (uint.TryParse(query.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _))
+        {
+            var soeMatches = await QueryCandidatesAsync(connection, """
+                SELECT id, name, '' AS zone, CONCAT('soe_item_id_unsigned=', soe_item_id_unsigned, '; item_type=', item_type) AS detail
+                FROM items
+                WHERE soe_item_id_unsigned = CAST(@query AS UNSIGNED)
+                ORDER BY id
+                LIMIT 1
+                """, query, "", "item", cancellationToken).ConfigureAwait(false);
+
+            var resolved = CandidateResult("item", query, soeMatches);
+            if (resolved.Status != ResolveStatus.Missing)
+                return resolved;
+        }
+
+        return await ResolveSimpleAsync(connection, "item", query, "items", "id", "name", "item_type", cancellationToken).ConfigureAwait(false);
     }
 
     private static Task<ResolvedReference> ResolveSpellAsync(MySqlConnection connection, string query, CancellationToken cancellationToken)

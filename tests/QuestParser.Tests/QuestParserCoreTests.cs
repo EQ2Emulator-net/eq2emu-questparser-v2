@@ -327,6 +327,19 @@ public sealed class QuestParserCoreTests
     }
 
     [Fact]
+    public void SqlGeneratorWritesQuestUpsertForResolvedQuestId()
+    {
+        var spec = BuildResolvedSpec();
+        spec.QuestId = ResolvedReference.Resolved("quest", spec.Quest.Name, 6288, spec.Quest.Name);
+
+        var sql = new SqlReportGenerator().GenerateSql(spec);
+
+        Assert.Contains("INSERT INTO quests", sql);
+        Assert.Contains("VALUES (6288,", sql);
+        Assert.Contains("ON DUPLICATE KEY UPDATE", sql);
+    }
+
+    [Fact]
     public void UtilityNormalizesPathsAndSplitsCoin()
     {
         Assert.Equal("a_hunters_tool.lua", Utilities.NormalizeQuestFileName("A Hunter's Tool"));

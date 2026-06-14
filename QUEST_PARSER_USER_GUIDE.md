@@ -35,6 +35,14 @@ Quest Lua can be generated in two modes. `Legacy spawn stub` is the current defa
 12. Review the `Generated / Raw Data` tabs, especially `Diagnostics`, `Lua Preview`, `SQL Preview`, `Missing Report`, and `Spec JSON`.
 13. Click `Generate Files` after all sections are verified and diagnostics have been reviewed.
 
+## Visual Editor Workflow
+
+The visual editor opens as a separate full-size window. From the desktop review UI, load or create a quest, then choose `Tools > Open Visual Editor...`. You can also launch the desktop app directly into the visual editor with `--visual-editor`.
+
+The editor uses the existing `.quest.json` spec as the source of truth. Graph positions, zoom, and review state are stored inside that spec under `visualEditor`. Sequential stages, parallel stages, random-option steps, and all current QuestParser step types round-trip through the same generation pipeline used by the review UI and CLI.
+
+The first implementation intentionally follows current QuestParser generation semantics. It does not add arbitrary conditional branches, loops, or failure paths.
+
 ## How to Read the Review Sections
 
 - `Quest metadata and DB quest ID`: quest name, zone/category, level, flags, offer text, completion text, and database quest ID. A proposed quest ID is acceptable, but review the generated SQL carefully.

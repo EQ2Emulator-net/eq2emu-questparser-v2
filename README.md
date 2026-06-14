@@ -122,6 +122,8 @@ UI:
 
 ```powershell
 dotnet run --project src\QuestParser.Desktop
+dotnet run --project src\QuestParser.Desktop -- --visual-editor
+dotnet run --project src\QuestParser.Desktop -- --visual-editor --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
 dotnet run --project src\QuestParser.WinForms
 ```
 
@@ -164,6 +166,8 @@ Generated files:
 - `SpawnScripts\<Zone>\<quest-giver>.example.lua`
 - `Quests\<Zone>\<quest>.quest.sql`
 - `Quests\<Zone>\<quest>.missing.md`
+
+Visual editor layout is stored inside the `.quest.json` spec under `visualEditor`. The quest spec remains the only quest-data file; no separate graph project file is required.
 
 The spawn script is an example starter scaffold for the resolved quest giver. Merge the relevant hail, click/cast, use, or item-examine hook into the live spawn or item script after review.
 

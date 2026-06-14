@@ -53,7 +53,18 @@ public partial class MainWindow : Window
     private void WireActions()
     {
         SettingsMenuItem.Click += async (_, _) => await OpenSettingsAsync();
-        VisualEditorMenuItem.Click += async (_, _) => await OpenVisualEditorAsync();
+        VisualEditorMenuItem.Click += async (_, _) =>
+        {
+            try
+            {
+                await OpenVisualEditorAsync();
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Open visual editor failed.");
+                AppendLog(ex.ToString());
+            }
+        };
         LayoutSettingsMenuItem.Click += async (_, _) => await OpenSettingsAsync();
         FetchButton.Click += async (_, _) => await RunAsync("Fetch + resolve", FetchAndResolveAsync);
         NewTemplateButton.Click += (_, _) => RunSync("Create template", CreateTemplateQuest);
@@ -320,15 +331,42 @@ public partial class MainWindow : Window
         if (result is null)
             return;
 
-        _spec = result;
-        QuestNameBox.Text = _spec.Quest.Name;
-        AuthorBox.Text = _spec.Quest.Author;
-        SpecPathBox.Text = _spec.Output.SpecPath;
-        RebuildSections();
-        SetWorkflowEnabled(true);
-        SelectSection(0);
-        RefreshPreview();
+        ApplyVisualEditorResult(result);
         AppendLog("Visual editor changes returned to the QuestParser review window.");
+    }
+
+    private void ApplyVisualEditorResult(QuestSpec spec)
+    {
+        var wasLoading = _loadingSection;
+        _loadingSection = true;
+
+        try
+        {
+            _spec = spec;
+            _currentSection = null;
+            _verifiedSections.Clear();
+            _dirtyEditorKeys.Clear();
+            _editors.Clear();
+            _sourceRows.Clear();
+            _candidateRows.Clear();
+            EditorHost.Children.Clear();
+            AcknowledgeDiagnosticsBox.IsChecked = false;
+
+            QuestNameBox.Text = _spec.Quest.Name;
+            AuthorBox.Text = _spec.Quest.Author;
+            SpecPathBox.Text = _spec.Output.SpecPath;
+
+            RebuildSections();
+            SetWorkflowEnabled(true);
+            SelectSection(0);
+        }
+        finally
+        {
+            _loadingSection = wasLoading;
+        }
+
+        RefreshPreview();
+        RefreshActionStates();
     }
 
     private static QuestSpec CloneSpec(QuestSpec spec)

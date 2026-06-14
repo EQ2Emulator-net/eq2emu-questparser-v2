@@ -40,10 +40,17 @@ public partial class App : Application
                 continue;
 
             var path = args[index + 1];
-            if (File.Exists(path))
-                return QuestWorkflow.ReadSpecAsync(path).GetAwaiter().GetResult();
+            if (!File.Exists(path))
+                return null;
 
-            return null;
+            try
+            {
+                return QuestWorkflow.ReadSpecAsync(path).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         return null;

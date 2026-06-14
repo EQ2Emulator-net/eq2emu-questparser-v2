@@ -17,6 +17,9 @@
             <MenuItem Header="_File">
                 <MenuItem Name="SettingsMenuItem" Header="_Settings..." />
             </MenuItem>
+            <MenuItem Header="_Tools">
+                <MenuItem Name="VisualEditorMenuItem" Header="_Open Visual Editor..." />
+            </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Name="LayoutSettingsMenuItem" Header="_Layout and visibility..." />
             </MenuItem>

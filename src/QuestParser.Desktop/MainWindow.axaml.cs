@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private void WireActions()
     {
         SettingsMenuItem.Click += async (_, _) => await OpenSettingsAsync();
+        VisualEditorMenuItem.Click += async (_, _) => await OpenVisualEditorAsync();
         LayoutSettingsMenuItem.Click += async (_, _) => await OpenSettingsAsync();
         FetchButton.Click += async (_, _) => await RunAsync("Fetch + resolve", FetchAndResolveAsync);
         NewTemplateButton.Click += (_, _) => RunSync("Create template", CreateTemplateQuest);
@@ -300,6 +301,34 @@ public partial class MainWindow : Window
         RefreshPreview();
         RefreshDiagnostics();
         AppendLog("Settings updated.");
+    }
+
+    private async Task OpenVisualEditorAsync()
+    {
+        if (_spec is null)
+        {
+            SetStatus("Load, import, or create a quest before opening the visual editor.");
+            AppendLog("Visual editor requires a loaded quest spec.");
+            return;
+        }
+
+        SaveCurrentSection();
+        ApplySettingsGenerationModeToSpec();
+
+        var editor = new VisualEditorWindow(_workflow, _spec, ownsSpec: false);
+        var result = await editor.ShowDialog<QuestSpec?>(this);
+        if (result is null)
+            return;
+
+        _spec = result;
+        QuestNameBox.Text = _spec.Quest.Name;
+        AuthorBox.Text = _spec.Quest.Author;
+        SpecPathBox.Text = _spec.Output.SpecPath;
+        RebuildSections();
+        SetWorkflowEnabled(true);
+        SelectSection(0);
+        RefreshPreview();
+        AppendLog("Visual editor changes returned to the QuestParser review window.");
     }
 
     private QuestWorkflow CreateWorkflowFromSettings()
@@ -1618,6 +1647,7 @@ public partial class MainWindow : Window
         NewTemplateButton.IsEnabled = !_busy;
         PreviewSpecButton.IsEnabled = !_busy;
         SettingsMenuItem.IsEnabled = !_busy;
+        VisualEditorMenuItem.IsEnabled = !_busy;
         LayoutSettingsMenuItem.IsEnabled = !_busy;
         PreviousButton.IsEnabled = !_busy && loaded;
         NextButton.IsEnabled = !_busy && loaded;

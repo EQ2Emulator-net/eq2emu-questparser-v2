@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using System.Globalization;
 using QuestParser.Core;
 
@@ -60,11 +61,74 @@ public partial class VisualEditorWindow : Window
         };
 
         ValidateButton.Click += (_, _) => RefreshDiagnostics();
+        OpenButton.Click += async (_, _) => await OpenSpecAsync();
+        GenerateButton.Click += async (_, _) => await GenerateAsync();
         SaveButton.Click += async (_, _) => await SaveAsync();
         ActionPaletteList.DoubleTapped += (_, _) => AddSelectedAction();
         FlowPaletteList.DoubleTapped += (_, _) => AddSelectedFlow();
         FormButton.Click += (_, _) => RefreshInspector();
         DefinitionButton.Click += (_, _) => ShowDefinition();
+    }
+
+    private async Task OpenSpecAsync()
+    {
+        try
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel?.StorageProvider.CanOpen != true)
+                return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Open quest spec",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Quest spec")
+                    {
+                        Patterns = ["*.quest.json"]
+                    }
+                ]
+            });
+
+            if (files.Count == 0)
+                return;
+
+            var path = files[0].Path.LocalPath;
+            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+                return;
+
+            var spec = await QuestWorkflow.ReadSpecAsync(path);
+            _viewModel.LoadSpec(spec);
+            RefreshAll();
+        }
+        catch (Exception ex)
+        {
+            _viewModel.GenerationLog.Add("Open spec failed: " + ex.Message);
+            RefreshBottomPanels();
+            RefreshEnabledState();
+        }
+    }
+
+    private async Task GenerateAsync()
+    {
+        try
+        {
+            var result = await _viewModel.GenerateAsync(overwrite: true);
+            if (result is null)
+                return;
+
+            foreach (var file in result.WrittenFiles)
+                _viewModel.GenerationLog.Add($"Generated {file}");
+
+            RefreshAll();
+        }
+        catch (Exception ex)
+        {
+            _viewModel.GenerationLog.Add("Generate failed: " + ex.Message);
+            RefreshBottomPanels();
+            RefreshEnabledState();
+        }
     }
 
     private async Task SaveAsync()
@@ -166,6 +230,8 @@ public partial class VisualEditorWindow : Window
     private void RefreshEnabledState()
     {
         var hasSpec = _viewModel.Spec is not null;
+        OpenButton.IsEnabled = true;
+        GenerateButton.IsEnabled = hasSpec;
         SaveButton.IsEnabled = hasSpec;
         ActionPaletteList.IsEnabled = hasSpec;
         FlowPaletteList.IsEnabled = hasSpec;

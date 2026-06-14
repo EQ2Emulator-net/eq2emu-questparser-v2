@@ -35,6 +35,7 @@ internal sealed class VisualEditorViewModel
     {
         ArgumentNullException.ThrowIfNull(spec);
 
+        ClearPreviewState();
         Spec = spec;
         SelectedNode = null;
         RebuildGraph();
@@ -64,6 +65,12 @@ internal sealed class VisualEditorViewModel
     {
         if (Spec is null)
             return;
+
+        if (stageIndex < 0 || stageIndex >= Spec.Stages.Count)
+        {
+            AddGenerationLogEntry($"Cannot add step: stage index {stageIndex} is not valid for {Spec.Stages.Count} stage(s).");
+            return;
+        }
 
         _linearizer.AddStep(Spec, stageIndex, stepType);
         IsDirty = true;
@@ -144,23 +151,17 @@ internal sealed class VisualEditorViewModel
     {
         if (Spec is null)
         {
-            LuaPreview = "";
-            SqlPreview = "";
-            MissingPreview = "";
-            Walkthrough = "";
-            Definition = "";
-            Diagnostics.Clear();
+            ClearPreviewState();
             return;
         }
 
         var diagnostics = Validate();
-        Walkthrough = BuildWalkthrough(Spec);
-        Definition = VisualEditorDefinitionBuilder.Build(Spec, SelectedNode);
+        RefreshTextState();
 
         if (diagnostics.Any(diagnostic => diagnostic.Severity == QuestDiagnosticSeverity.Blocker)
             && !string.IsNullOrEmpty(LuaPreview))
         {
-            GenerationLog.Add("Preview not refreshed because diagnostics contain blockers; stale generated output is still shown.");
+            AddGenerationLogEntry("Preview not refreshed because diagnostics contain blockers; stale generated output is still shown.");
             return;
         }
 
@@ -170,12 +171,10 @@ internal sealed class VisualEditorViewModel
             LuaPreview = preview.Lua;
             SqlPreview = preview.Sql;
             MissingPreview = preview.MissingReport;
-            Walkthrough = BuildWalkthrough(Spec);
-            Definition = VisualEditorDefinitionBuilder.Build(Spec, SelectedNode);
         }
         catch (Exception ex)
         {
-            GenerationLog.Add("Preview failed: " + ex.Message);
+            AddGenerationLogEntry("Preview failed: " + ex.Message);
         }
     }
 
@@ -212,6 +211,17 @@ internal sealed class VisualEditorViewModel
         return result;
     }
 
+    private void ClearPreviewState()
+    {
+        LuaPreview = "";
+        SqlPreview = "";
+        MissingPreview = "";
+        Walkthrough = "";
+        Definition = "";
+        Diagnostics.Clear();
+        GenerationLog.Clear();
+    }
+
     private void RebuildGraph()
     {
         if (Spec is null)
@@ -228,6 +238,30 @@ internal sealed class VisualEditorViewModel
             ? null
             : Graph.Nodes.FirstOrDefault(node => string.Equals(node.Id, selectedNodeId, StringComparison.Ordinal));
         Definition = VisualEditorDefinitionBuilder.Build(Spec, SelectedNode);
+    }
+
+    private void RefreshTextState()
+    {
+        if (Spec is null)
+        {
+            Walkthrough = "";
+            Definition = "";
+            return;
+        }
+
+        Walkthrough = BuildWalkthrough(Spec);
+        Definition = VisualEditorDefinitionBuilder.Build(Spec, SelectedNode);
+    }
+
+    private void AddGenerationLogEntry(string message)
+    {
+        if (GenerationLog.Count > 0
+            && string.Equals(GenerationLog[^1], message, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        GenerationLog.Add(message);
     }
 
     private static string BuildWalkthrough(QuestSpec spec)

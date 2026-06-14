@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\QuestParser.Core\QuestParser.Core.csproj" />
     <ProjectReference Include="..\..\src\QuestParser.Cli\QuestParser.Cli.csproj" />
+    <ProjectReference Include="..\..\src\QuestParser.Desktop\QuestParser.Desktop.csproj" />
   </ItemGroup>
 
 </Project>

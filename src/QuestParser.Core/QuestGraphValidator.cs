@@ -8,19 +8,26 @@ public sealed class QuestGraphValidator
         var nodeIds = graph.Nodes
             .Select(node => node.Id)
             .ToHashSet(StringComparer.Ordinal);
-        var outgoingCounts = graph.Edges
+        var nodesById = graph.Nodes
+            .GroupBy(node => node.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+        var outgoingTargetsBySource = graph.Edges
             .GroupBy(edge => edge.SourceNodeId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        var generatedJoinIds = graph.Nodes
-            .Where(node => RequiresGeneratedJoin(node, outgoingCounts))
-            .Select(node => $"{node.Id}-join")
-            .ToHashSet(StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => group.Select(edge => edge.TargetNodeId).ToList(), StringComparer.Ordinal);
+        var incomingSourcesByTarget = graph.Edges
+            .GroupBy(edge => edge.TargetNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(edge => edge.SourceNodeId).ToList(), StringComparer.Ordinal);
 
         ValidateStartCount(graph, diagnostics);
         ValidateCompleteCount(graph, diagnostics);
         ValidateEdges(graph, nodeIds, diagnostics);
-        ValidateBranches(graph, outgoingCounts, generatedJoinIds, diagnostics);
-        ValidateParallelJoins(graph, nodeIds, outgoingCounts, diagnostics);
+        var validGeneratedJoinIds = ValidateParallelJoins(
+            graph,
+            nodesById,
+            outgoingTargetsBySource,
+            incomingSourcesByTarget,
+            diagnostics);
+        ValidateBranches(graph, outgoingTargetsBySource, validGeneratedJoinIds, diagnostics);
 
         return diagnostics
             .OrderByDescending(diagnostic => diagnostic.Severity)
@@ -66,50 +73,108 @@ public sealed class QuestGraphValidator
 
     private static void ValidateBranches(
         QuestGraph graph,
-        Dictionary<string, int> outgoingCounts,
-        HashSet<string> generatedJoinIds,
+        Dictionary<string, List<string>> outgoingTargetsBySource,
+        HashSet<string> validGeneratedJoinIds,
         List<QuestDiagnostic> diagnostics)
     {
         foreach (var node in graph.Nodes)
         {
-            if (!outgoingCounts.TryGetValue(node.Id, out var outgoingCount) || outgoingCount <= 1)
+            if (!outgoingTargetsBySource.TryGetValue(node.Id, out var outgoingTargets) || outgoingTargets.Count <= 1)
                 continue;
-            if (node.IsParallelStage || generatedJoinIds.Contains(node.Id))
+            if (node.IsParallelStage || validGeneratedJoinIds.Contains(node.Id))
                 continue;
 
             Add(
                 diagnostics,
                 SectionForNode(node),
                 "GRAPH_UNSUPPORTED_BRANCH",
-                $"Node '{NodeName(node)}' has {outgoingCount} outgoing edges; arbitrary branching is not supported.");
+                $"Node '{NodeName(node)}' has {outgoingTargets.Count} outgoing edges; arbitrary branching is not supported.");
         }
     }
 
-    private static void ValidateParallelJoins(
+    private static HashSet<string> ValidateParallelJoins(
         QuestGraph graph,
-        HashSet<string> nodeIds,
-        Dictionary<string, int> outgoingCounts,
+        Dictionary<string, List<QuestGraphNode>> nodesById,
+        Dictionary<string, List<string>> outgoingTargetsBySource,
+        Dictionary<string, List<string>> incomingSourcesByTarget,
         List<QuestDiagnostic> diagnostics)
     {
-        foreach (var stage in graph.Nodes.Where(node => RequiresGeneratedJoin(node, outgoingCounts)))
+        var validJoinIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var stage in graph.Nodes.Where(node => RequiresGeneratedJoin(node, outgoingTargetsBySource)))
         {
             var joinId = $"{stage.Id}-join";
-            if (nodeIds.Contains(joinId))
+            if (!nodesById.TryGetValue(joinId, out var joinNodes) || joinNodes.Count == 0)
+            {
+                Add(
+                    diagnostics,
+                    SectionForNode(stage),
+                    "GRAPH_PARALLEL_JOIN",
+                    $"Parallel stage node '{NodeName(stage)}' is missing generated join node '{joinId}'.");
                 continue;
+            }
 
-            Add(
-                diagnostics,
-                SectionForNode(stage),
-                "GRAPH_PARALLEL_JOIN",
-                $"Parallel stage node '{NodeName(stage)}' is missing generated join node '{joinId}'.");
+            if (joinNodes.Count != 1)
+            {
+                Add(
+                    diagnostics,
+                    SectionForNode(stage),
+                    "GRAPH_PARALLEL_JOIN",
+                    $"Parallel stage node '{NodeName(stage)}' must have exactly one generated join node '{joinId}'.");
+                continue;
+            }
+
+            var join = joinNodes[0];
+            var problems = ValidateJoinShape(stage, join, outgoingTargetsBySource, incomingSourcesByTarget);
+            var joinOutgoingCount = outgoingTargetsBySource.TryGetValue(join.Id, out var joinOutgoingTargets)
+                ? joinOutgoingTargets.Count
+                : 0;
+
+            if (problems.Count > 0)
+            {
+                Add(
+                    diagnostics,
+                    SectionForNode(stage),
+                    "GRAPH_PARALLEL_JOIN",
+                    $"Generated join node '{NodeName(join)}' is malformed: {string.Join("; ", problems)}.");
+                continue;
+            }
+
+            if (joinOutgoingCount <= 1)
+                validJoinIds.Add(join.Id);
         }
+
+        return validJoinIds;
     }
 
-    private static bool RequiresGeneratedJoin(QuestGraphNode node, Dictionary<string, int> outgoingCounts)
+    private static List<string> ValidateJoinShape(
+        QuestGraphNode stage,
+        QuestGraphNode join,
+        Dictionary<string, List<string>> outgoingTargetsBySource,
+        Dictionary<string, List<string>> incomingSourcesByTarget)
+    {
+        var problems = new List<string>();
+        if (join.Kind != QuestGraphNodeKind.Stage)
+            problems.Add("kind must be Stage");
+        if (join.StageNumber != stage.StageNumber)
+            problems.Add("StageNumber must match the parallel stage");
+        if (join.StageIndex != stage.StageIndex)
+            problems.Add("StageIndex must match the parallel stage");
+
+        var expectedFanInSources = outgoingTargetsBySource[stage.Id].ToHashSet(StringComparer.Ordinal);
+        var actualFanInSources = incomingSourcesByTarget.TryGetValue(join.Id, out var incomingSources)
+            ? incomingSources.ToHashSet(StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+        if (!expectedFanInSources.SetEquals(actualFanInSources))
+            problems.Add("fan-in sources must match the parallel stage fan-out targets");
+
+        return problems;
+    }
+
+    private static bool RequiresGeneratedJoin(QuestGraphNode node, Dictionary<string, List<string>> outgoingTargetsBySource)
     {
         return node.IsParallelStage
-            && outgoingCounts.TryGetValue(node.Id, out var outgoingCount)
-            && outgoingCount > 1;
+            && outgoingTargetsBySource.TryGetValue(node.Id, out var outgoingTargets)
+            && outgoingTargets.Count > 1;
     }
 
     private static string SectionForNode(QuestGraphNode node)

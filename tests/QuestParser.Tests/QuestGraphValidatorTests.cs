@@ -23,10 +23,7 @@ public sealed class QuestGraphValidatorTests
 
         var diagnostics = new QuestGraphValidator().Validate(graph);
 
-        Assert.DoesNotContain(
-            diagnostics,
-            diagnostic => diagnostic.Severity == QuestDiagnosticSeverity.Blocker
-                && diagnostic.Code == "GRAPH_PARALLEL_JOIN");
+        Assert.Empty(diagnostics);
     }
 
     [Fact]
@@ -51,6 +48,60 @@ public sealed class QuestGraphValidatorTests
         var diagnostics = new QuestGraphValidator().Validate(graph);
 
         AssertContainsBlocker(diagnostics, "GRAPH_PARALLEL_JOIN");
+    }
+
+    [Fact]
+    public void ParallelStageJoinWithoutBranchFanInYieldsParallelJoinDiagnostic()
+    {
+        var graph = Project(BuildParallelSpec());
+        graph.Edges.RemoveAll(edge => edge.TargetNodeId == "stage-1-join");
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_PARALLEL_JOIN");
+    }
+
+    [Theory]
+    [InlineData("kind")]
+    [InlineData("stage-number")]
+    [InlineData("stage-index")]
+    public void MalformedParallelStageJoinYieldsParallelJoinDiagnostic(string malformedField)
+    {
+        var graph = Project(BuildParallelSpec());
+        var join = Assert.Single(graph.Nodes, node => node.Id == "stage-1-join");
+        switch (malformedField)
+        {
+            case "kind":
+                join.Kind = QuestGraphNodeKind.Step;
+                break;
+            case "stage-number":
+                join.StageNumber = 99;
+                break;
+            case "stage-index":
+                join.StageIndex = 99;
+                break;
+        }
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_PARALLEL_JOIN");
+    }
+
+    [Fact]
+    public void GeneratedJoinWithMultipleOutgoingEdgesYieldsUnsupportedBranchDiagnostic()
+    {
+        var graph = Project(BuildParallelSpec());
+        graph.Edges.Add(new QuestGraphEdge
+        {
+            Id = "stage-1-join->complete-extra",
+            SourceNodeId = "stage-1-join",
+            TargetNodeId = "complete",
+            Label = "extra"
+        });
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_UNSUPPORTED_BRANCH");
     }
 
     [Fact]
@@ -119,10 +170,7 @@ public sealed class QuestGraphValidatorTests
 
         var diagnostics = new QuestGraphValidator().Validate(graph);
 
-        Assert.DoesNotContain(
-            diagnostics,
-            diagnostic => diagnostic.Severity == QuestDiagnosticSeverity.Blocker
-                && diagnostic.Code == "GRAPH_PARALLEL_JOIN");
+        Assert.Empty(diagnostics);
     }
 
     private static QuestGraph Project(QuestSpec spec)

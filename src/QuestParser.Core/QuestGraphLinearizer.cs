@@ -4,10 +4,8 @@ public sealed class QuestGraphLinearizer
 {
     public void MoveStage(QuestSpec spec, int fromStageIndex, int toStageIndex)
     {
-        if (fromStageIndex < 0 || fromStageIndex >= spec.Stages.Count)
-            throw new ArgumentOutOfRangeException(nameof(fromStageIndex));
-        if (toStageIndex < 0 || toStageIndex >= spec.Stages.Count)
-            throw new ArgumentOutOfRangeException(nameof(toStageIndex));
+        ValidateStageIndex(spec, fromStageIndex, nameof(fromStageIndex));
+        ValidateStageIndex(spec, toStageIndex, nameof(toStageIndex));
 
         var stage = spec.Stages[fromStageIndex];
         spec.Stages.RemoveAt(fromStageIndex);
@@ -17,8 +15,12 @@ public sealed class QuestGraphLinearizer
 
     public void MoveStep(QuestSpec spec, int fromStageIndex, int fromStepIndex, int toStageIndex, int toStepIndex)
     {
+        ValidateStageIndex(spec, fromStageIndex, nameof(fromStageIndex));
+        ValidateStageIndex(spec, toStageIndex, nameof(toStageIndex));
         var fromStage = spec.Stages[fromStageIndex];
         var toStage = spec.Stages[toStageIndex];
+        ValidateStepIndex(fromStage, fromStepIndex, nameof(fromStepIndex));
+
         var step = fromStage.Steps[fromStepIndex];
         fromStage.Steps.RemoveAt(fromStepIndex);
 
@@ -42,6 +44,7 @@ public sealed class QuestGraphLinearizer
 
     public QuestStepSpec AddStep(QuestSpec spec, int stageIndex, StepType stepType)
     {
+        ValidateStageIndex(spec, stageIndex, nameof(stageIndex));
         var stage = spec.Stages[stageIndex];
         var kind = QuestSpecFactory.KindForStepType(stepType);
         var step = new QuestStepSpec
@@ -72,12 +75,17 @@ public sealed class QuestGraphLinearizer
 
     public void RemoveStep(QuestSpec spec, int stageIndex, int stepIndex)
     {
-        spec.Stages[stageIndex].Steps.RemoveAt(stepIndex);
+        ValidateStageIndex(spec, stageIndex, nameof(stageIndex));
+        var stage = spec.Stages[stageIndex];
+        ValidateStepIndex(stage, stepIndex, nameof(stepIndex));
+
+        stage.Steps.RemoveAt(stepIndex);
         NormalizeNumbers(spec);
     }
 
     public void SetStageParallel(QuestSpec spec, int stageIndex, bool isParallel)
     {
+        ValidateStageIndex(spec, stageIndex, nameof(stageIndex));
         spec.Stages[stageIndex].IsParallel = isParallel;
         NormalizeNumbers(spec);
     }
@@ -92,6 +100,8 @@ public sealed class QuestGraphLinearizer
             foreach (var step in stage.Steps)
                 step.Number = nextStepNumber++;
         }
+
+        InvalidateVisualLayout(spec);
     }
 
     private static string DisplayName(StepType type)
@@ -103,5 +113,22 @@ public sealed class QuestGraphLinearizer
             StepType.ZoneLocation => "Zone location",
             _ => type.ToString()
         };
+    }
+
+    private static void ValidateStageIndex(QuestSpec spec, int stageIndex, string paramName)
+    {
+        if (stageIndex < 0 || stageIndex >= spec.Stages.Count)
+            throw new ArgumentOutOfRangeException(paramName);
+    }
+
+    private static void ValidateStepIndex(QuestStageSpec stage, int stepIndex, string paramName)
+    {
+        if (stepIndex < 0 || stepIndex >= stage.Steps.Count)
+            throw new ArgumentOutOfRangeException(paramName);
+    }
+
+    private static void InvalidateVisualLayout(QuestSpec spec)
+    {
+        spec.VisualEditor?.Nodes.Clear();
     }
 }

@@ -1,0 +1,118 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:QuestParser.Desktop"
+        mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
+        x:Class="QuestParser.Desktop.VisualEditorWindow"
+        Title="EQ2Emu Quest Visual Editor"
+        Width="1440"
+        Height="900"
+        MinWidth="1100"
+        MinHeight="720"
+        FontFamily="Inter, Segoe UI, sans-serif"
+        FontSize="13"
+        Background="#EEF2F7">
+    <Grid RowDefinitions="Auto,*" Margin="12" RowSpacing="10">
+        <Border Grid.Row="0"
+                Background="#F8FAFC"
+                BorderBrush="#CBD5E1"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="8">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Name="UndoButton" Content="Undo" MinWidth="72" />
+                    <Button Name="RedoButton" Content="Redo" MinWidth="72" />
+                    <Button Name="ZoomInButton" Content="Zoom in" MinWidth="84" />
+                    <Button Name="ZoomOutButton" Content="Zoom out" MinWidth="88" />
+                    <Button Name="CenterButton" Content="Center" MinWidth="78" />
+                    <Button Name="ValidateButton" Content="Validate" MinWidth="92" />
+                    <Button Name="SaveButton" Classes="primary" Content="Save" MinWidth="78" />
+                    <Button Name="FormButton" Content="Form" MinWidth="72" />
+                    <Button Name="DefinitionButton" Content="Definition" MinWidth="96" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="1" ColumnDefinitions="280,*,340" RowDefinitions="*,260" ColumnSpacing="10" RowSpacing="10">
+            <GroupBox Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Header="Palette" Padding="8">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <TextBox Grid.Row="0" Name="PaletteSearchBox" PlaceholderText="Search palette" />
+                    <TabControl Grid.Row="1">
+                        <TabItem Header="Actions">
+                            <ListBox Name="ActionPaletteList" Classes="mono-list" />
+                        </TabItem>
+                        <TabItem Header="Flow">
+                            <ListBox Name="FlowPaletteList" Classes="mono-list" />
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Grid.Row="0" Grid.Column="1" Header="Workflow" Padding="0">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <local:QuestGraphCanvas Name="GraphCanvas" Width="1800" Height="1400" />
+                </ScrollViewer>
+            </GroupBox>
+
+            <GroupBox Grid.Row="0" Grid.Column="2" Header="Inspector" Padding="8">
+                <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <TextBlock Grid.Row="0"
+                               Name="InspectorTitleText"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Text="Workflow" />
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Name="InspectorPanel" Spacing="8" />
+                    </ScrollViewer>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Header="Diagnostics and Previews" Padding="8">
+                <TabControl>
+                    <TabItem Header="Diagnostics">
+                        <ListBox Name="DiagnosticsList" Classes="mono-list" />
+                    </TabItem>
+                    <TabItem Header="Walkthrough">
+                        <TextBox Name="WalkthroughBox"
+                                 Classes="mono-box"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    </TabItem>
+                    <TabItem Header="Lua Preview">
+                        <TextBox Name="LuaPreviewBox"
+                                 Classes="mono-box"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                    </TabItem>
+                    <TabItem Header="SQL Preview">
+                        <TextBox Name="SqlPreviewBox"
+                                 Classes="mono-box"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                    </TabItem>
+                    <TabItem Header="Missing Report">
+                        <TextBox Name="MissingPreviewBox"
+                                 Classes="mono-box"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    </TabItem>
+                    <TabItem Header="Generation Log">
+                        <ListBox Name="GenerationLogList" Classes="mono-list" />
+                    </TabItem>
+                </TabControl>
+            </GroupBox>
+        </Grid>
+    </Grid>
+</Window>

@@ -138,12 +138,28 @@ public partial class VisualEditorWindow : Window
 
     private async Task GenerateAsync()
     {
+        if (_viewModel.Spec is null)
+        {
+            _viewModel.GenerationLog.Add("Generate skipped: no spec is loaded.");
+            RefreshBottomPanels();
+            RefreshEnabledState();
+            return;
+        }
+
+        if (!_ownsSpec)
+        {
+            _viewModel.GenerationLog.Add("Generate skipped: integrated visual editor changes must be saved before generation.");
+            RefreshBottomPanels();
+            RefreshEnabledState();
+            return;
+        }
+
         if (!TryBeginBusy())
             return;
 
         try
         {
-            var result = await _viewModel.GenerateAsync(overwrite: true);
+            var result = await _viewModel.GenerateAsync(overwrite: false);
             if (result is null)
                 return;
 
@@ -285,7 +301,7 @@ public partial class VisualEditorWindow : Window
         var isIdle = !_busy;
         ValidateButton.IsEnabled = isIdle;
         OpenButton.IsEnabled = isIdle;
-        GenerateButton.IsEnabled = hasSpec && isIdle;
+        GenerateButton.IsEnabled = hasSpec && isIdle && _ownsSpec;
         SaveButton.IsEnabled = hasSpec && isIdle;
         FormButton.IsEnabled = isIdle;
         DefinitionButton.IsEnabled = isIdle;

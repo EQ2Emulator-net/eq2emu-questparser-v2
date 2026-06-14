@@ -137,6 +137,70 @@ public sealed class QuestGraphValidatorTests
         AssertContainsBlocker(diagnostics, "GRAPH_DISCONNECTED_EDGE");
     }
 
+    [Fact]
+    public void DuplicateNodeIdYieldsDuplicateNodeDiagnostic()
+    {
+        var graph = Project(BuildSpec());
+        graph.Nodes.Add(new QuestGraphNode
+        {
+            Id = "stage-1-step-1",
+            Kind = QuestGraphNodeKind.Step,
+            StageNumber = 1,
+            StepNumber = 99,
+            Title = "Duplicate step"
+        });
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_DUPLICATE_NODE");
+    }
+
+    [Fact]
+    public void OrphanGeneratedStepYieldsUnreachableNodeDiagnostic()
+    {
+        var graph = Project(BuildSpec());
+        graph.Nodes.Add(new QuestGraphNode
+        {
+            Id = "stage-99-step-1",
+            Kind = QuestGraphNodeKind.Step,
+            StageNumber = 99,
+            StageIndex = 98,
+            StepNumber = 1,
+            Title = "Orphan generated step"
+        });
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_UNREACHABLE_NODE");
+    }
+
+    [Fact]
+    public void NodeUnableToReachCompleteYieldsIncompletePathDiagnostic()
+    {
+        var graph = Project(BuildSpec());
+        graph.Edges.RemoveAll(edge => edge.TargetNodeId == "complete");
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_INCOMPLETE_PATH");
+    }
+
+    [Fact]
+    public void BackEdgeCycleYieldsCycleDiagnostic()
+    {
+        var graph = Project(BuildSpec());
+        graph.Edges.Add(new QuestGraphEdge
+        {
+            Id = "stage-2-step-2->stage-1",
+            SourceNodeId = "stage-2-step-2",
+            TargetNodeId = "stage-1"
+        });
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        AssertContainsBlocker(diagnostics, "GRAPH_CYCLE");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -194,13 +194,23 @@ public partial class VisualEditorWindow : Window
             && TryGetSelectedStep(spec, selectedNode, out _, out var step))
         {
             AddNodeHeaderRows(selectedNode);
-            AddEditableRow("Description", step.Description, value => step.Description = value);
-            AddEditableRow("Completed", step.CompletedDescription, value => step.CompletedDescription = value);
-            AddEditableRow("Search", step.SearchText, value =>
+            AddEditableMultilineRow("Description", step.Description, value => step.Description = value);
+            AddEditableMultilineRow("Completed", step.CompletedDescription, value => step.CompletedDescription = value);
+            if (selectedNode.Kind == QuestGraphNodeKind.RandomOptions || step.HasRandomOptions)
             {
-                step.SearchText = value;
-                EnsureStepTarget(step).Query = value;
-            });
+                AddReadOnlyRow(
+                    "Search",
+                    "Random option targets are reviewed/generated from option entries and are not edited in this inspector yet.",
+                    acceptsReturn: true);
+            }
+            else
+            {
+                AddEditableRow("Search", step.SearchText, value =>
+                {
+                    step.SearchText = value;
+                    step.Target = ResolvedReference.Missing(QuestSpecFactory.KindForStepType(step.Type), value);
+                });
+            }
             AddEditableIntRow("Quantity", step.QuantityMax, value => step.QuantityMax = value);
             return;
         }
@@ -216,8 +226,8 @@ public partial class VisualEditorWindow : Window
             && TryGetSelectedStage(spec, selectedNode, out var stage))
         {
             AddNodeHeaderRows(selectedNode);
-            AddEditableRow("Stage text", stage.Description, value => stage.Description = value);
-            AddEditableRow("Completed text", stage.CompletedDescription, value => stage.CompletedDescription = value);
+            AddEditableMultilineRow("Stage text", stage.Description, value => stage.Description = value);
+            AddEditableMultilineRow("Completed text", stage.CompletedDescription, value => stage.CompletedDescription = value);
             AddReadOnlyRow("Parallel", stage.IsParallel ? "Yes" : "No");
             return;
         }
@@ -281,6 +291,16 @@ public partial class VisualEditorWindow : Window
 
     private void AddEditableRow(string label, string value, Action<string> save)
     {
+        AddEditableRow(label, value, save, multiline: false);
+    }
+
+    private void AddEditableMultilineRow(string label, string value, Action<string> save)
+    {
+        AddEditableRow(label, value, save, multiline: true);
+    }
+
+    private void AddEditableRow(string label, string value, Action<string> save, bool multiline)
+    {
         InspectorPanel.Children.Add(new TextBlock
         {
             Text = label,
@@ -288,13 +308,12 @@ public partial class VisualEditorWindow : Window
         });
 
         var currentValue = value ?? "";
-        var acceptsReturn = IsMultilineInspectorRow(label);
         var textBox = new TextBox
         {
             Text = currentValue,
-            AcceptsReturn = acceptsReturn,
-            TextWrapping = acceptsReturn ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            MinHeight = acceptsReturn ? 96 : 32
+            AcceptsReturn = multiline,
+            TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            MinHeight = multiline ? 96 : 32
         };
 
         textBox.LostFocus += (_, _) =>
@@ -370,8 +389,8 @@ public partial class VisualEditorWindow : Window
 
         AddEditableRow("Quest name", spec.Quest.Name, value => spec.Quest.Name = value);
         AddEditableRow("Zone", spec.Quest.Zone, value => spec.Quest.Zone = value);
-        AddEditableRow("Starter text", spec.Quest.StarterText, value => spec.Quest.StarterText = value);
-        AddEditableRow("Completion text", spec.Quest.CompletionText, value => spec.Quest.CompletionText = value);
+        AddEditableMultilineRow("Starter text", spec.Quest.StarterText, value => spec.Quest.StarterText = value);
+        AddEditableMultilineRow("Completion text", spec.Quest.CompletionText, value => spec.Quest.CompletionText = value);
     }
 
     private void AddNodeHeaderRows(QuestGraphNode selectedNode)
@@ -467,22 +486,9 @@ public partial class VisualEditorWindow : Window
         return true;
     }
 
-    private static ResolvedReference EnsureStepTarget(QuestStepSpec step)
-    {
-        step.Target ??= ResolvedReference.Missing(QuestSpecFactory.KindForStepType(step.Type), step.SearchText);
-        return step.Target;
-    }
-
     private static bool IsStepNode(QuestGraphNode selectedNode)
     {
         return selectedNode.Kind is QuestGraphNodeKind.Step or QuestGraphNodeKind.RandomOptions;
-    }
-
-    private static bool IsMultilineInspectorRow(string label)
-    {
-        return label.Contains("text", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(label, "Description", StringComparison.Ordinal)
-            || string.Equals(label, "Completed", StringComparison.Ordinal);
     }
 
     private string BuildWorkflowDetails()

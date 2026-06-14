@@ -68,6 +68,12 @@ public partial class VisualEditorWindow : Window
 
     private async Task SaveAsync()
     {
+        if (_viewModel.Spec is null)
+        {
+            RefreshEnabledState();
+            return;
+        }
+
         try
         {
             await _viewModel.SaveSpecAsync();
@@ -80,11 +86,18 @@ public partial class VisualEditorWindow : Window
         {
             _viewModel.GenerationLog.Add("Save failed: " + ex.Message);
             RefreshBottomPanels();
+            RefreshEnabledState();
         }
     }
 
     private void AddSelectedAction()
     {
+        if (_viewModel.Spec is null)
+        {
+            RefreshEnabledState();
+            return;
+        }
+
         if (ActionPaletteList.SelectedItem is not PaletteItem { StepType: { } stepType })
             return;
 
@@ -95,6 +108,12 @@ public partial class VisualEditorWindow : Window
 
     private void AddSelectedFlow()
     {
+        if (_viewModel.Spec is null)
+        {
+            RefreshEnabledState();
+            return;
+        }
+
         if (FlowPaletteList.SelectedItem is not PaletteItem item)
             return;
 
@@ -108,6 +127,11 @@ public partial class VisualEditorWindow : Window
                 _viewModel.AddStage(isParallel: true);
                 RefreshAll();
                 break;
+            default:
+                _viewModel.GenerationLog.Add($"Flow item '{item.Label}' is not wired yet.");
+                RefreshBottomPanels();
+                RefreshEnabledState();
+                break;
         }
     }
 
@@ -115,9 +139,10 @@ public partial class VisualEditorWindow : Window
     {
         _viewModel.RefreshPreview();
         RefreshCanvas();
-        RefreshDiagnostics();
+        BindDiagnostics();
         RefreshInspector();
         RefreshBottomPanels();
+        RefreshEnabledState();
     }
 
     private void RefreshCanvas()
@@ -129,7 +154,20 @@ public partial class VisualEditorWindow : Window
     private void RefreshDiagnostics()
     {
         _viewModel.Validate();
+        BindDiagnostics();
+    }
+
+    private void BindDiagnostics()
+    {
         DiagnosticsList.ItemsSource = _viewModel.Diagnostics;
+    }
+
+    private void RefreshEnabledState()
+    {
+        var hasSpec = _viewModel.Spec is not null;
+        SaveButton.IsEnabled = hasSpec;
+        ActionPaletteList.IsEnabled = hasSpec;
+        FlowPaletteList.IsEnabled = hasSpec;
     }
 
     private void RefreshInspector()

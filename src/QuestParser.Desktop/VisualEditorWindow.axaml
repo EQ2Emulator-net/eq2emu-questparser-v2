@@ -22,11 +22,11 @@
                 Padding="8">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Name="UndoButton" Content="Undo" MinWidth="72" />
-                    <Button Name="RedoButton" Content="Redo" MinWidth="72" />
-                    <Button Name="ZoomInButton" Content="Zoom in" MinWidth="84" />
-                    <Button Name="ZoomOutButton" Content="Zoom out" MinWidth="88" />
-                    <Button Name="CenterButton" Content="Center" MinWidth="78" />
+                    <Button Name="UndoButton" Content="Undo" MinWidth="72" IsEnabled="False" />
+                    <Button Name="RedoButton" Content="Redo" MinWidth="72" IsEnabled="False" />
+                    <Button Name="ZoomInButton" Content="Zoom in" MinWidth="84" IsEnabled="False" />
+                    <Button Name="ZoomOutButton" Content="Zoom out" MinWidth="88" IsEnabled="False" />
+                    <Button Name="CenterButton" Content="Center" MinWidth="78" IsEnabled="False" />
                     <Button Name="ValidateButton" Content="Validate" MinWidth="92" />
                     <Button Name="SaveButton" Classes="primary" Content="Save" MinWidth="78" />
                     <Button Name="FormButton" Content="Form" MinWidth="72" />

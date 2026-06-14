@@ -20,21 +20,25 @@
                 BorderThickness="1"
                 CornerRadius="4"
                 Padding="8">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
-                    <Button Grid.Column="0" Name="UndoButton" Content="Undo" MinWidth="72" IsEnabled="False" />
-                    <Button Grid.Column="1" Name="RedoButton" Content="Redo" MinWidth="72" IsEnabled="False" />
-                    <Button Grid.Column="2" Name="ZoomInButton" Content="Zoom in" MinWidth="84" IsEnabled="False" />
-                    <Button Grid.Column="3" Name="ZoomOutButton" Content="Zoom out" MinWidth="88" IsEnabled="False" />
-                    <Button Grid.Column="4" Name="CenterButton" Content="Center" MinWidth="78" IsEnabled="False" />
-                    <Button Grid.Column="5" Name="ValidateButton" Content="Validate" MinWidth="92" />
-                    <Button Grid.Column="6" Name="OpenButton" Content="Open" MinWidth="82" />
-                    <Button Grid.Column="7" Name="GenerateButton" Content="Generate" MinWidth="96" />
-                    <Button Grid.Column="8" Name="SaveButton" Classes="primary" Content="Save" MinWidth="78" />
-                    <Button Grid.Column="10" Name="FormButton" Content="Form" MinWidth="72" />
-                    <Button Grid.Column="11" Name="DefinitionButton" Content="Definition" MinWidth="96" />
-                </Grid>
-            </ScrollViewer>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Name="UndoButton" Content="Undo" MinWidth="72" IsEnabled="False" />
+                        <Button Name="RedoButton" Content="Redo" MinWidth="72" IsEnabled="False" />
+                        <Button Name="ZoomInButton" Content="Zoom in" MinWidth="84" IsEnabled="False" />
+                        <Button Name="ZoomOutButton" Content="Zoom out" MinWidth="88" IsEnabled="False" />
+                        <Button Name="CenterButton" Content="Center" MinWidth="78" IsEnabled="False" />
+                        <Button Name="ValidateButton" Content="Validate" MinWidth="92" />
+                        <Button Name="OpenButton" Content="Open" MinWidth="82" />
+                        <Button Name="GenerateButton" Content="Generate" MinWidth="96" />
+                        <Button Name="SaveButton" Classes="primary" Content="Save" MinWidth="78" />
+                    </StackPanel>
+                </ScrollViewer>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Name="FormButton" Content="Form" MinWidth="72" />
+                    <Button Name="DefinitionButton" Content="Definition" MinWidth="96" />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="1" ColumnDefinitions="280,*,340" RowDefinitions="*,260" ColumnSpacing="10" RowSpacing="10">

@@ -10,6 +10,7 @@ public partial class VisualEditorWindow : Window
 {
     private readonly VisualEditorViewModel _viewModel;
     private readonly bool _ownsSpec;
+    private bool _busy;
 
     public VisualEditorWindow()
         : this(new QuestWorkflow(), null, ownsSpec: true)
@@ -72,11 +73,18 @@ public partial class VisualEditorWindow : Window
 
     private async Task OpenSpecAsync()
     {
+        if (!TryBeginBusy())
+            return;
+
         try
         {
             var topLevel = TopLevel.GetTopLevel(this);
             if (topLevel?.StorageProvider.CanOpen != true)
+            {
+                _viewModel.GenerationLog.Add("Open spec failed: file picker is not available.");
+                RefreshBottomPanels();
                 return;
+            }
 
             var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
@@ -94,12 +102,25 @@ public partial class VisualEditorWindow : Window
             if (files.Count == 0)
                 return;
 
-            var path = files[0].Path.LocalPath;
-            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+            var selectedPath = files[0].Path;
+            if (!selectedPath.IsFile)
+            {
+                _viewModel.GenerationLog.Add($"Open spec failed: selected file is not local: {selectedPath}");
+                RefreshBottomPanels();
                 return;
+            }
+
+            var path = selectedPath.LocalPath;
+            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+            {
+                _viewModel.GenerationLog.Add($"Open spec failed: selected file does not exist: {path}");
+                RefreshBottomPanels();
+                return;
+            }
 
             var spec = await QuestWorkflow.ReadSpecAsync(path);
             _viewModel.LoadSpec(spec);
+            _viewModel.GenerationLog.Add($"Loaded {path}");
             RefreshAll();
         }
         catch (Exception ex)
@@ -108,10 +129,18 @@ public partial class VisualEditorWindow : Window
             RefreshBottomPanels();
             RefreshEnabledState();
         }
+        finally
+        {
+            _busy = false;
+            RefreshEnabledState();
+        }
     }
 
     private async Task GenerateAsync()
     {
+        if (!TryBeginBusy())
+            return;
+
         try
         {
             var result = await _viewModel.GenerateAsync(overwrite: true);
@@ -129,6 +158,11 @@ public partial class VisualEditorWindow : Window
             RefreshBottomPanels();
             RefreshEnabledState();
         }
+        finally
+        {
+            _busy = false;
+            RefreshEnabledState();
+        }
     }
 
     private async Task SaveAsync()
@@ -138,6 +172,9 @@ public partial class VisualEditorWindow : Window
             RefreshEnabledState();
             return;
         }
+
+        if (!TryBeginBusy())
+            return;
 
         try
         {
@@ -153,6 +190,21 @@ public partial class VisualEditorWindow : Window
             RefreshBottomPanels();
             RefreshEnabledState();
         }
+        finally
+        {
+            _busy = false;
+            RefreshEnabledState();
+        }
+    }
+
+    private bool TryBeginBusy()
+    {
+        if (_busy)
+            return false;
+
+        _busy = true;
+        RefreshEnabledState();
+        return true;
     }
 
     private void AddSelectedAction()
@@ -230,11 +282,15 @@ public partial class VisualEditorWindow : Window
     private void RefreshEnabledState()
     {
         var hasSpec = _viewModel.Spec is not null;
-        OpenButton.IsEnabled = true;
-        GenerateButton.IsEnabled = hasSpec;
-        SaveButton.IsEnabled = hasSpec;
-        ActionPaletteList.IsEnabled = hasSpec;
-        FlowPaletteList.IsEnabled = hasSpec;
+        var isIdle = !_busy;
+        ValidateButton.IsEnabled = isIdle;
+        OpenButton.IsEnabled = isIdle;
+        GenerateButton.IsEnabled = hasSpec && isIdle;
+        SaveButton.IsEnabled = hasSpec && isIdle;
+        FormButton.IsEnabled = isIdle;
+        DefinitionButton.IsEnabled = isIdle;
+        ActionPaletteList.IsEnabled = hasSpec && isIdle;
+        FlowPaletteList.IsEnabled = hasSpec && isIdle;
     }
 
     private void RefreshInspector()

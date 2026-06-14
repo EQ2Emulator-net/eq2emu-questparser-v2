@@ -15,6 +15,21 @@ public sealed class QuestGraphValidatorTests
     }
 
     [Fact]
+    public void OneStepParallelStageProjectedGraphHasNoParallelJoinBlocker()
+    {
+        var spec = BuildSpec();
+        spec.Stages[0].IsParallel = true;
+        var graph = Project(spec);
+
+        var diagnostics = new QuestGraphValidator().Validate(graph);
+
+        Assert.DoesNotContain(
+            diagnostics,
+            diagnostic => diagnostic.Severity == QuestDiagnosticSeverity.Blocker
+                && diagnostic.Code == "GRAPH_PARALLEL_JOIN");
+    }
+
+    [Fact]
     public void MissingCompleteNodeYieldsCompleteCountDiagnostic()
     {
         var graph = Project(BuildSpec());

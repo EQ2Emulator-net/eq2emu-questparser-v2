@@ -18,4 +18,7 @@ public sealed partial class CensusJsonContext : JsonSerializerContext;
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(QuestSpec))]
+[JsonSerializable(typeof(QuestVisualEditorState))]
+[JsonSerializable(typeof(QuestGraphNodeLayout))]
+[JsonSerializable(typeof(QuestGraphViewport))]
 public sealed partial class QuestSpecJsonContext : JsonSerializerContext;

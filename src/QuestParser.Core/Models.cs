@@ -47,6 +47,7 @@ public sealed class QuestSpec
     public QuestRewardSpec Rewards { get; set; } = new();
     public List<string> Todos { get; set; } = [];
     public GenerationStatus Generation { get; set; } = new();
+    public QuestVisualEditorState? VisualEditor { get; set; }
 }
 
 public sealed class QuestMetadata

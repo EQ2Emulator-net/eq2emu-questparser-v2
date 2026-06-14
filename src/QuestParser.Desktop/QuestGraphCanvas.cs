@@ -99,8 +99,9 @@ internal sealed class QuestGraphCanvas : Control
         _capturedPointer = e.Pointer;
         _dragOffset = pointerPoint.Position - nodeRect.Position;
 
-        SelectedNodeId = node.Id;
-        NodeSelected?.Invoke(node.Id);
+        var nodeId = CleanText(node.Id);
+        SelectedNodeId = nodeId;
+        NodeSelected?.Invoke(nodeId);
         e.Pointer.Capture(this);
         e.Handled = true;
     }
@@ -109,7 +110,7 @@ internal sealed class QuestGraphCanvas : Control
     {
         base.OnPointerMoved(e);
 
-        if (_draggedNode is null)
+        if (_draggedNode is null || _capturedPointer != e.Pointer)
             return;
 
         var pointerPoint = e.GetCurrentPoint(this);
@@ -120,10 +121,11 @@ internal sealed class QuestGraphCanvas : Control
         }
 
         var position = pointerPoint.Position - _dragOffset;
-        _draggedNode.Layout.X = position.X;
-        _draggedNode.Layout.Y = position.Y;
+        var layout = GetLayout(_draggedNode);
+        layout.X = position.X;
+        layout.Y = position.Y;
 
-        NodeMoved?.Invoke(_draggedNode.Id, position.X, position.Y);
+        NodeMoved?.Invoke(CleanText(_draggedNode.Id), position.X, position.Y);
         InvalidateVisual();
         e.Handled = true;
     }
@@ -158,16 +160,21 @@ internal sealed class QuestGraphCanvas : Control
     private void DrawEdges(DrawingContext context)
     {
         var nodesById = new Dictionary<string, QuestGraphNode>(StringComparer.Ordinal);
-        foreach (var node in Graph.Nodes)
+        foreach (var node in EnumerateNodes())
         {
-            if (!string.IsNullOrWhiteSpace(node.Id))
-                nodesById[node.Id] = node;
+            var nodeId = node.Id;
+            if (!string.IsNullOrWhiteSpace(nodeId))
+                nodesById[nodeId] = node;
         }
 
-        foreach (var edge in Graph.Edges)
+        foreach (var edge in EnumerateEdges())
         {
-            if (!nodesById.TryGetValue(edge.SourceNodeId, out var source)
-                || !nodesById.TryGetValue(edge.TargetNodeId, out var target))
+            var sourceNodeId = edge.SourceNodeId;
+            var targetNodeId = edge.TargetNodeId;
+            if (string.IsNullOrWhiteSpace(sourceNodeId)
+                || string.IsNullOrWhiteSpace(targetNodeId)
+                || !nodesById.TryGetValue(sourceNodeId, out var source)
+                || !nodesById.TryGetValue(targetNodeId, out var target))
             {
                 continue;
             }
@@ -185,7 +192,7 @@ internal sealed class QuestGraphCanvas : Control
 
     private void DrawNodes(DrawingContext context)
     {
-        foreach (var node in Graph.Nodes)
+        foreach (var node in EnumerateNodes())
             DrawNode(context, node);
     }
 
@@ -216,10 +223,12 @@ internal sealed class QuestGraphCanvas : Control
         var textWidth = Math.Max(0, rect.Width - horizontalPadding * 2);
         var titleHeight = compact ? 16 : 20;
         var titleSize = compact ? 10 : 13;
+        var title = CleanText(node.Title);
+        var fallbackTitle = CleanText(node.Id);
 
         DrawTrimmedText(
             context,
-            string.IsNullOrWhiteSpace(node.Title) ? node.Id : node.Title,
+            string.IsNullOrWhiteSpace(title) ? fallbackTitle : title,
             new Point(textX, textY),
             textWidth,
             titleHeight,
@@ -244,7 +253,7 @@ internal sealed class QuestGraphCanvas : Control
         }
     }
 
-    private static void DrawEdgeLabel(DrawingContext context, string label, Point start, Point end)
+    private static void DrawEdgeLabel(DrawingContext context, string? label, Point start, Point end)
     {
         label = CleanText(label);
         if (string.IsNullOrWhiteSpace(label))
@@ -265,7 +274,7 @@ internal sealed class QuestGraphCanvas : Control
 
     private static void DrawTrimmedText(
         DrawingContext context,
-        string text,
+        string? text,
         Point origin,
         double maxWidth,
         double maxHeight,
@@ -324,9 +333,16 @@ internal sealed class QuestGraphCanvas : Control
 
     private QuestGraphNode? HitTestNode(Point position)
     {
-        for (var index = Graph.Nodes.Count - 1; index >= 0; index--)
+        var nodes = Graph.Nodes;
+        if (nodes is null)
+            return null;
+
+        for (var index = nodes.Count - 1; index >= 0; index--)
         {
-            var node = Graph.Nodes[index];
+            var node = nodes[index];
+            if (node is null)
+                continue;
+
             if (GetNodeRect(node).Contains(position))
                 return node;
         }
@@ -343,10 +359,47 @@ internal sealed class QuestGraphCanvas : Control
 
     private static Rect GetNodeRect(QuestGraphNode node)
     {
-        var layout = node.Layout;
+        var layout = GetLayout(node);
         var width = layout.Width > 0 ? layout.Width : DefaultWidthFor(node.Kind);
         var height = layout.Height > 0 ? layout.Height : DefaultHeightFor(node.Kind);
         return new Rect(layout.X, layout.Y, width, height);
+    }
+
+    private static QuestGraphNodeLayout GetLayout(QuestGraphNode node)
+    {
+        return node.Layout ??= new QuestGraphNodeLayout
+        {
+            Id = CleanText(node.Id),
+            Kind = node.Kind,
+            Width = DefaultWidthFor(node.Kind),
+            Height = DefaultHeightFor(node.Kind)
+        };
+    }
+
+    private IEnumerable<QuestGraphNode> EnumerateNodes()
+    {
+        var nodes = Graph.Nodes;
+        if (nodes is null)
+            yield break;
+
+        foreach (var node in nodes)
+        {
+            if (node is not null)
+                yield return node;
+        }
+    }
+
+    private IEnumerable<QuestGraphEdge> EnumerateEdges()
+    {
+        var edges = Graph.Edges;
+        if (edges is null)
+            yield break;
+
+        foreach (var edge in edges)
+        {
+            if (edge is not null)
+                yield return edge;
+        }
     }
 
     private static IBrush GetNodeFill(QuestGraphNodeKind kind)
@@ -398,8 +451,11 @@ internal sealed class QuestGraphCanvas : Control
         return new Point(center.X + dx * scale, center.Y + dy * scale);
     }
 
-    private static string CleanText(string text)
+    private static string CleanText(string? text)
     {
+        if (text is null)
+            return "";
+
         return text
             .Replace('\r', ' ')
             .Replace('\n', ' ')

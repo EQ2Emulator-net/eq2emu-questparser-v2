@@ -14,7 +14,7 @@ public sealed class QuestGraphLayoutService
     {
         var existing = FindExistingLayout(spec.VisualEditor, node);
         if (existing is not null)
-            return existing;
+            return CloneForNode(existing, node);
 
         var y = 60 + orderIndex * StageSpacingY;
         var x = CenterX;
@@ -58,9 +58,46 @@ public sealed class QuestGraphLayoutService
         if (exact is not null)
             return exact;
 
-        return state.Nodes.FirstOrDefault(layout =>
-            layout.Kind == node.Kind
+        var fallbackMatches = state.Nodes
+            .Where(layout => IsFallbackMatch(layout, node))
+            .Take(2)
+            .ToList();
+
+        return fallbackMatches.Count == 1 ? fallbackMatches[0] : null;
+    }
+
+    private static bool IsFallbackMatch(QuestGraphNodeLayout layout, QuestGraphNode node)
+    {
+        if (node.Kind is QuestGraphNodeKind.Start or QuestGraphNodeKind.Complete or QuestGraphNodeKind.Stage)
+            return false;
+
+        if (node.StageNumber is null || node.StepNumber is null)
+            return false;
+
+        var defaultStepId = $"stage-{node.StageNumber}-step-{node.StepNumber}";
+        if (!string.Equals(node.Id, defaultStepId, StringComparison.Ordinal))
+            return false;
+
+        return layout.Kind == node.Kind
             && layout.StageNumber == node.StageNumber
-            && layout.StepNumber == node.StepNumber);
+            && layout.StepNumber == node.StepNumber;
+    }
+
+    private static QuestGraphNodeLayout CloneForNode(QuestGraphNodeLayout layout, QuestGraphNode node)
+    {
+        return new QuestGraphNodeLayout
+        {
+            Id = node.Id,
+            Kind = node.Kind,
+            StageNumber = node.StageNumber,
+            StepNumber = node.StepNumber,
+            OptionIndex = layout.OptionIndex,
+            X = layout.X,
+            Y = layout.Y,
+            Width = layout.Width,
+            Height = layout.Height,
+            Collapsed = layout.Collapsed,
+            ReviewStatus = layout.ReviewStatus
+        };
     }
 }

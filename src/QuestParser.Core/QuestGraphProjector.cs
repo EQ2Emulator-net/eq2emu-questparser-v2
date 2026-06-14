@@ -12,11 +12,13 @@ public sealed class QuestGraphProjector
     public QuestGraph Project(QuestSpec spec)
     {
         var graph = new QuestGraph();
+        var usedNodeIds = new HashSet<string>(StringComparer.Ordinal);
         var order = 0;
 
         var start = CreateNode("start", QuestGraphNodeKind.Start, "Start", spec.Quest.Name);
         start.Layout = _layoutService.LayoutFor(spec, start, order++);
         graph.Nodes.Add(start);
+        usedNodeIds.Add(start.Id);
 
         string previousExit = start.Id;
         foreach (var stage in spec.Stages.OrderBy(s => s.Number))
@@ -32,6 +34,7 @@ public sealed class QuestGraphProjector
             stageNode.IsParallelStage = stage.IsParallel;
             stageNode.Layout = _layoutService.LayoutFor(spec, stageNode, order++);
             graph.Nodes.Add(stageNode);
+            usedNodeIds.Add(stageNode.Id);
             graph.Edges.Add(CreateEdge(previousExit, stageNode.Id, ""));
 
             if (stage.IsParallel && stage.Steps.Count > 1)
@@ -43,27 +46,28 @@ public sealed class QuestGraphProjector
                     stage.CompletedDescription);
                 joinNode.StageNumber = stage.Number;
                 joinNode.StageIndex = stageIndex;
-                joinNode.Layout = _layoutService.LayoutFor(spec, joinNode, order);
-                graph.Nodes.Add(joinNode);
 
+                var childOrder = order++;
                 for (var i = 0; i < stage.Steps.Count; i++)
                 {
-                    var stepNode = CreateStepNode(stage, stageIndex, stage.Steps[i], i);
-                    stepNode.Layout = _layoutService.LayoutFor(spec, stepNode, order, i, stage.Steps.Count);
+                    var stepNode = CreateStepNode(stage, stageIndex, stage.Steps[i], i, usedNodeIds);
+                    stepNode.Layout = _layoutService.LayoutFor(spec, stepNode, childOrder, i, stage.Steps.Count);
                     graph.Nodes.Add(stepNode);
                     graph.Edges.Add(CreateEdge(stageNode.Id, stepNode.Id, "parallel"));
                     graph.Edges.Add(CreateEdge(stepNode.Id, joinNode.Id, "complete"));
                 }
 
+                joinNode.Layout = _layoutService.LayoutFor(spec, joinNode, order++);
+                graph.Nodes.Add(joinNode);
+                usedNodeIds.Add(joinNode.Id);
                 previousExit = joinNode.Id;
-                order++;
             }
             else
             {
                 string prior = stageNode.Id;
                 for (var i = 0; i < stage.Steps.Count; i++)
                 {
-                    var stepNode = CreateStepNode(stage, stageIndex, stage.Steps[i], i);
+                    var stepNode = CreateStepNode(stage, stageIndex, stage.Steps[i], i, usedNodeIds);
                     stepNode.Layout = _layoutService.LayoutFor(spec, stepNode, order++);
                     graph.Nodes.Add(stepNode);
                     graph.Edges.Add(CreateEdge(prior, stepNode.Id, ""));
@@ -77,18 +81,24 @@ public sealed class QuestGraphProjector
         var complete = CreateNode("complete", QuestGraphNodeKind.Complete, "Complete", spec.Quest.CompletionText);
         complete.Layout = _layoutService.LayoutFor(spec, complete, order);
         graph.Nodes.Add(complete);
+        usedNodeIds.Add(complete.Id);
         graph.Edges.Add(CreateEdge(previousExit, complete.Id, ""));
 
         _layoutService.EnsureVisualState(spec, graph);
         return graph;
     }
 
-    private static QuestGraphNode CreateStepNode(QuestStageSpec stage, int stageIndex, QuestStepSpec step, int stepIndex)
+    private static QuestGraphNode CreateStepNode(
+        QuestStageSpec stage,
+        int stageIndex,
+        QuestStepSpec step,
+        int stepIndex,
+        HashSet<string> usedNodeIds)
     {
         var kind = step.HasRandomOptions ? QuestGraphNodeKind.RandomOptions : QuestGraphNodeKind.Step;
         return new QuestGraphNode
         {
-            Id = $"stage-{stage.Number}-step-{step.Number}",
+            Id = CreateStepNodeId(stage, step, stepIndex, usedNodeIds),
             Kind = kind,
             StageNumber = stage.Number,
             StepNumber = step.Number,
@@ -99,6 +109,27 @@ public sealed class QuestGraphProjector
             Subtitle = step.Description,
             RandomOptionCount = step.RandomOptions.Count
         };
+    }
+
+    private static string CreateStepNodeId(
+        QuestStageSpec stage,
+        QuestStepSpec step,
+        int stepIndex,
+        HashSet<string> usedNodeIds)
+    {
+        var baseId = $"stage-{stage.Number}-step-{step.Number}";
+        if (usedNodeIds.Add(baseId))
+            return baseId;
+
+        var suffix = stepIndex + 1;
+        var candidate = $"{baseId}-{suffix}";
+        while (!usedNodeIds.Add(candidate))
+        {
+            suffix++;
+            candidate = $"{baseId}-{suffix}";
+        }
+
+        return candidate;
     }
 
     private static QuestGraphNode CreateNode(string id, QuestGraphNodeKind kind, string title, string subtitle)

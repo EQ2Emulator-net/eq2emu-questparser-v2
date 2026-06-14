@@ -26,8 +26,9 @@ public static class ProgramMain
                     var author = Get(options, "author", "");
                     var contentRoot = Get(options, "content-root", Defaults.ContentRoot);
                     var overwrite = Has(options, "overwrite");
-                    var result = await workflow.CreateAsync(quest, contentRoot, author, overwrite);
-                    PrintResult("Created quest assets", result);
+                    var mode = GetGenerationMode(options);
+                    var result = await workflow.CreateAsync(quest, contentRoot, author, overwrite, CancellationToken.None, mode, strictModuleLuaValidation: true);
+                    PrintResult("Created quest assets", result, includeDiagnostics: true);
                     return 0;
                 }
                 case "import":
@@ -50,8 +51,9 @@ public static class ProgramMain
                 {
                     var spec = Require(options, "spec");
                     var overwrite = Has(options, "overwrite");
-                    var result = await workflow.GenerateAsync(spec, overwrite);
-                    PrintResult("Generated quest assets", result);
+                    var mode = GetGenerationMode(options);
+                    var result = await workflow.GenerateAsync(spec, overwrite, CancellationToken.None, mode, strictModuleLuaValidation: true);
+                    PrintResult("Generated quest assets", result, includeDiagnostics: true);
                     return 0;
                 }
                 case "lint":
@@ -118,6 +120,20 @@ public static class ProgramMain
         return options.ContainsKey(name);
     }
 
+    private static QuestGenerationMode? GetGenerationMode(Dictionary<string, string?> options)
+    {
+        if (!options.TryGetValue("mode", out var value))
+            return null;
+
+        return value?.ToLowerInvariant() switch
+        {
+            "legacy-spawn-stub" => QuestGenerationMode.LegacySpawnStub,
+            "module-lua" => QuestGenerationMode.ModuleLua,
+            null or "" => throw new ArgumentException("Missing value for --mode. Expected legacy-spawn-stub or module-lua."),
+            _ => throw new ArgumentException($"Invalid value for --mode: {value}. Expected legacy-spawn-stub or module-lua.")
+        };
+    }
+
     private static QuestWorkflow CreateWorkflow(Dictionary<string, string?> options)
     {
         var censusOptions = CensusSourceOptions.FromEnvironment().WithOverrides(
@@ -150,7 +166,7 @@ public static class ProgramMain
         throw new ArgumentException($"Invalid boolean value for --{name}: {value}");
     }
 
-    private static void PrintResult(string title, QuestWorkflowResult result)
+    private static void PrintResult(string title, QuestWorkflowResult result, bool includeDiagnostics = false)
     {
         Console.WriteLine(title);
         Console.WriteLine($"Quest: {result.Spec.Quest.Name}");
@@ -165,6 +181,19 @@ public static class ProgramMain
             foreach (var todo in result.Spec.Todos)
                 Console.WriteLine($"  {todo}");
         }
+        if (includeDiagnostics)
+            PrintDiagnostics(result.Spec);
+    }
+
+    private static void PrintDiagnostics(QuestSpec spec)
+    {
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+        if (diagnostics.Count == 0)
+            return;
+
+        Console.WriteLine("Diagnostics:");
+        foreach (var diagnostic in diagnostics)
+            Console.WriteLine($"  {diagnostic.Severity} {diagnostic.Code}: {diagnostic.Message}");
     }
 
     private static void PrintHelp()
@@ -173,10 +202,10 @@ public static class ProgramMain
             EQ2Emu QuestParser
 
             Commands:
-              questparser create --quest "<quest name>" [--author "<name>"] [--overwrite]
+              questparser create --quest "<quest name>" [--author "<name>"] [--overwrite] [--mode legacy-spawn-stub|module-lua]
               questparser import --quest "<quest name>" [--author "<name>"]
               questparser resolve --spec "<path-to-json>"
-              questparser generate --spec "<path-to-json>" [--overwrite]
+              questparser generate --spec "<path-to-json>" [--overwrite] [--mode legacy-spawn-stub|module-lua]
               questparser lint [--content-root "<path>"]
 
             Defaults:

@@ -14,10 +14,12 @@ QuestParser turns a Census quest or a manual template into reviewable EQ2Emu con
 
 The SQL is not executed by the tool. Review it before applying anything to a database.
 
+Quest Lua can be generated in two modes. `Legacy spawn stub` is the current default workflow. `Quest module Lua` writes quest scripts that use `SpawnScripts/Generic/QuestModule.lua` for repeated step setup, reload, and completion boilerplate.
+
 ## Recommended Workflow
 
 1. Open the desktop app and check the settings summary strip.
-2. Open `File > Settings...` if the content root, quest source, or MariaDB resolver is wrong.
+2. Open `File > Settings...` if the content root, quest source, Lua generation mode, or MariaDB resolver is wrong.
 3. Enter the exact quest name in `Quest name`.
 4. Enter `Author` if you want the generated spec/Lua metadata to carry a name.
 5. Choose either:
@@ -53,7 +55,9 @@ Reference statuses mean:
 
 `Generate Files` is intentionally gated. The app checks for blockers such as blank quest names, missing quest givers, ambiguous/missing target IDs, invalid quantities, missing output paths, or existing Lua files when overwrite is off.
 
-Warnings are softer review items, such as blank zone text, generic quest steps, proposed quest IDs, or blank SQL/missing-report paths.
+Warnings are softer review items, such as blank zone text, generic quest steps, proposed quest IDs, blank SQL/missing-report paths, or a missing shared `SpawnScripts/Generic/QuestModule.lua` file when `Quest module Lua` is selected.
+
+`Quest module Lua` adds stricter module-specific blockers for duplicate step IDs, non-contiguous stage numbering, and quantity ranges where the minimum is greater than the maximum.
 
 If blockers remain and you intentionally want to generate anyway, review the `Diagnostics` tab and check `Acknowledge blockers and allow generation`. This is useful for draft content, but final production content should usually resolve blockers instead of bypassing them.
 
@@ -74,6 +78,12 @@ Open `File > Settings...` for parser behavior and `View > Layout and visibility.
 - `Daybreak base URL`: official or compatible Daybreak base URL. Leave this alone unless the endpoint changes or you are testing a compatible service.
 - `Remote mirror URL`: base URL for a hosted mirror. Set this only when `Quest source` is `Remote`.
 - `Local JSON folder`: folder containing Census-compatible files. QuestParser looks for quest-specific names such as `<quest>.quest.json` and `<quest>.questgivers.json`, and also accepts `quest.json`, `quests.json`, `questgiver.json`, `questgivers.json`, plus `item.json` or `items.json` for reward item names.
+
+### Quest Generation
+
+- `Lua generation`: choose `Legacy spawn stub` for the existing generated quest Lua and spawn-starter workflow.
+- Choose `Quest module Lua` to generate quest scripts that call `SpawnScripts/Generic/QuestModule.lua`.
+- Before using generated module Lua in content, make sure `SpawnScripts/Generic/QuestModule.lua` exists under the selected content root.
 
 ### Database Resolution
 
@@ -118,10 +128,11 @@ questparser import --quest "A Hunter's Tool"
 questparser import --quest "A Hunter's Tool" --census-source local --census-local-dir ".\downloaded-census-json"
 questparser resolve --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
 questparser generate --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
+questparser generate --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json" --mode module-lua --overwrite
 questparser lint --content-root ".\eq2emu-content"
 ```
 
-Use `--overwrite` with `generate` only when replacing existing generated files is intentional.
+Use `--mode legacy-spawn-stub` or `--mode module-lua` with `create` or `generate` to override the mode stored in the spec. Use `--overwrite` with `generate` only when replacing existing generated files is intentional.
 
 ## Final Review Checklist
 

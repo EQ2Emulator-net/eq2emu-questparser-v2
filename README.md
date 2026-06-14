@@ -137,6 +137,7 @@ protected unless `Overwrite Lua` is checked.
 Additional UI authoring helpers:
 
 - `Resolve Section` re-runs DB resolution only for the current quest ID, giver, step, or reward section.
+- `File > Settings...` includes `Lua generation`, which switches between the current legacy quest Lua/spawn-starter output and the newer shared `QuestModule` Lua output.
 - The review grid includes provenance so values can be traced to the quest source, DB resolution, generated defaults, templates, or user overrides.
 - Missing NPC references show a Missing Spawn Wizard with suggested spawn script path, Lua TODO text, and commented review-only SQL.
 - The Diagnostics tab lists blockers and warnings. Blockers must be fixed or explicitly acknowledged before generation.
@@ -150,6 +151,7 @@ dotnet run --project src\QuestParser.Cli -- import --quest "A Hunter's Tool"
 dotnet run --project src\QuestParser.Cli -- import --quest "A Hunter's Tool" --census-source local --census-local-dir ".\downloaded-census-json"
 dotnet run --project src\QuestParser.Cli -- resolve --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
 dotnet run --project src\QuestParser.Cli -- generate --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
+dotnet run --project src\QuestParser.Cli -- generate --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json" --mode module-lua --overwrite
 dotnet run --project src\QuestParser.Cli -- lint
 ```
 
@@ -164,6 +166,13 @@ Generated files:
 - `Quests\<Zone>\<quest>.missing.md`
 
 The spawn script is an example starter scaffold for the resolved quest giver. Merge the relevant hail, click/cast, use, or item-examine hook into the live spawn or item script after review.
+
+Generation modes:
+
+- `legacy-spawn-stub` is the default and preserves the current generated quest Lua plus spawn-starter workflow.
+- `module-lua` emits quest Lua that delegates step setup/reload/completion boilerplate to `SpawnScripts/Generic/QuestModule.lua`.
+- For `module-lua`, copy or keep `SpawnScripts/Generic/QuestModule.lua` in the selected content root. The CLI prints `MODULE_LUA_MISSING_QUEST_MODULE` when that file is missing.
+- CLI `create`/`generate --mode module-lua` uses strict module validation and will not write output when module-specific blockers such as duplicate step IDs, non-contiguous stages, or invalid quantity ranges are present.
 
 The SQL file is review-only. The tool resolves from the DB but does not insert, update, or delete database rows.
 Static quest rewards are emitted as `quest_details` SQL rows instead of Lua reward calls, so applying both generated Lua and generated SQL will not duplicate rewards.

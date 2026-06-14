@@ -26,9 +26,17 @@ public enum ResolveStatus
     Resolved
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<QuestGenerationMode>))]
+public enum QuestGenerationMode
+{
+    LegacySpawnStub,
+    ModuleLua
+}
+
 public sealed class QuestSpec
 {
     public string SchemaVersion { get; set; } = "1.0";
+    public QuestGenerationMode GenerationMode { get; set; } = QuestGenerationMode.LegacySpawnStub;
     public QuestMetadata Quest { get; set; } = new();
     public OutputPaths Output { get; set; } = new();
     public Dictionary<string, string> Provenance { get; set; } = [];

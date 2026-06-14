@@ -1,4 +1,5 @@
 using System.Net;
+using System.Diagnostics;
 using System.Text.Json;
 using QuestParser.Core;
 
@@ -273,6 +274,412 @@ public sealed class QuestParserCoreTests
     }
 
     [Fact]
+    public void ModuleLuaGeneratorEmitsStageTablesAndHandlers()
+    {
+        var spec = BuildResolvedSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("require \"SpawnScripts/Generic/QuestModule\"", lua);
+        Assert.DoesNotContain("local QuestModule = require", lua);
+        Assert.Contains("local STAGE_1_STEPS = {", lua);
+        Assert.Contains("QuestModule.ExportStepHandlers(STAGE_1_STEPS, { overwrite = true })", lua);
+        Assert.Contains("QuestModule.AddSteps(Quest, STAGE_1_STEPS)", lua);
+        Assert.Contains("local ALL_STEPS = {}", lua);
+        Assert.Equal(1, CountOccurrences(lua, "QuestModule.ReloadByStep"));
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorKeepsLegacyGeneratorUnchanged()
+    {
+        var spec = BuildResolvedSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+
+        var lua = new LuaGenerator().Generate(spec);
+
+        Assert.DoesNotContain("SpawnScripts/Generic/QuestModule", lua);
+        Assert.Contains("function AddStage1Steps(Quest)", lua);
+        Assert.Contains("function Step1Complete(Quest, QuestGiver, Player)", lua);
+        Assert.Contains("function Reload(Quest, QuestGiver, Player, Step)", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorUsesLuaSafeQuestIdentifier()
+    {
+        var spec = BuildResolvedSpec();
+        spec.Quest.Name = "123 Training Mission";
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("local Quest123TrainingMission = 9001", lua);
+        Assert.DoesNotContain("local 123TrainingMission = 9001", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorEmitsQuestModuleCompatibleTypesAndFields()
+    {
+        var spec = BuildAllStepTypesSpec();
+        var expectedModuleTypes = new Dictionary<StepType, string>
+        {
+            [StepType.Generic] = "basic",
+            [StepType.Chat] = "chat",
+            [StepType.Craft] = "craft",
+            [StepType.Harvest] = "harvest",
+            [StepType.Kill] = "kill",
+            [StepType.KillByRace] = "killByRace",
+            [StepType.Location] = "location",
+            [StepType.ObtainItem] = "obtainItem",
+            [StepType.Spell] = "spell",
+            [StepType.ZoneLocation] = "zoneLoc"
+        };
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Equal(Enum.GetValues<StepType>().OrderBy(type => type), expectedModuleTypes.Keys.OrderBy(type => type));
+        foreach (var moduleType in expectedModuleTypes.Values)
+            Assert.Contains($"\t\ttype = \"{moduleType}\",", lua);
+        Assert.Contains("\t\t\t{ x = 10.125, y = 20.25, z = -30.375 }", lua);
+        Assert.Contains("\t\t\t{ x = 40.125, y = 50.25, z = 60.375, zone = 12 }", lua);
+        Assert.DoesNotContain("\t\t\t{ x = 0, y = 0, z = 0", lua);
+        Assert.DoesNotContain("\t\ttype = \"Harvest\",", lua);
+        Assert.DoesNotContain("\t\ttype = \"ObtainItem\",", lua);
+        Assert.Contains("\t\ttaskGroupText = ", lua);
+        Assert.Contains("\t\ttaskGroupDescription = ", lua);
+        Assert.Contains("\t\tcompleteText = ", lua);
+        Assert.Contains("\t\tcompleteDescription = ", lua);
+        Assert.Contains("\t\tcompleteTaskGroup = ", lua);
+        Assert.Contains("\t\tcompleteTaskGroupDescription = ", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorEmitsQuestModuleCompatibleLocations()
+    {
+        var spec = BuildLocationSpec();
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("\t\ttype = \"location\",", lua);
+        Assert.Contains("\t\tmaxVariation = 12.345,", lua);
+        Assert.Contains("\t\tlocations = {", lua);
+        Assert.Contains("\t\t\t{ x = 1.234, y = 2, z = -3.456 }", lua);
+        Assert.DoesNotContain("\t\t\t{ x = 1.234, y = 2, z = -3.456, zone =", lua);
+        Assert.Contains("\t\ttype = \"zoneLoc\",", lua);
+        Assert.Contains("\t\tmaxVariation = 25,", lua);
+        Assert.Contains("\t\t\t{ x = 4, y = 5.5, z = 6, zone = 12 }", lua);
+        Assert.DoesNotContain("\t\ttargets =", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorEmitsQuantityRangesAsData()
+    {
+        var spec = BuildQuantityRangeModuleSpec();
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("\t\tcount = { min = 15, max = 20 },", lua);
+        Assert.DoesNotContain("MakeRandomInt(15, 20)", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorEmitsRandomOptions()
+    {
+        var spec = BuildRandomModuleSpec();
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("\t\tid = 1,", lua);
+        Assert.Contains("\t\ttype = \"kill\",", lua);
+        Assert.Contains("\t\tcomplete = \"Step1Complete\",", lua);
+        Assert.Contains("\t\trandomOptions = {", lua);
+        Assert.Contains("\t\t\t\ttext = \"Kill stone beetles\",", lua);
+        Assert.Contains("\t\t\t\tcount = { min = 3, max = 5 },", lua);
+        Assert.DoesNotContain("MakeRandomInt(3, 5)", lua);
+        Assert.Contains("\t\t\t\tpercentage = 100,", lua);
+        Assert.Contains("\t\t\t\ticon = 611,", lua);
+        Assert.Contains("\t\t\t\ttargets = { 330070 }", lua);
+        Assert.Contains("\t\t\t\ttext = \"Kill dervish cutthroats\",", lua);
+        Assert.Contains("\t\t\t\ttargets = { 330092 }", lua);
+        Assert.DoesNotContain("\t\ttargets = {},", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorOmitsEmptyTargetsForTargetlessBasicStep()
+    {
+        var spec = BuildTargetlessBasicSpec();
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("\t\ttype = \"basic\",", lua);
+        Assert.DoesNotContain("\t\ttargets = {},", lua);
+        Assert.DoesNotContain("\t\ttargets =", lua);
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorSanitizesHeaderLongCommentTerminators()
+    {
+        var spec = BuildResolvedSpec();
+        spec.Quest.Name = "Bad ]] Quest";
+        spec.Quest.Zone = "Zone ]] Name";
+        spec.Quest.Author = "Author ]] Name";
+        spec.Giver.Name = "Giver ]] Name";
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.DoesNotContain("Bad ]] Quest", lua);
+        Assert.DoesNotContain("Zone ]] Name", lua);
+        Assert.DoesNotContain("Author ]] Name", lua);
+        Assert.DoesNotContain("Giver ]] Name", lua);
+        Assert.Contains("Bad ] ] Quest", lua);
+        Assert.Contains("Zone ] ] Name", lua);
+        Assert.Contains("Author ] ] Name", lua);
+        Assert.Contains("Giver ] ] Name", lua);
+    }
+
+    [Fact]
+    public async Task ModuleLuaGeneratorGeneratedLuaRunsWithGlobalQuestModuleStub()
+    {
+        var luaExecutable = FindLuaExecutable();
+        if (luaExecutable is null)
+            return;
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-lua-smoke-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRoot, "SpawnScripts", "Generic"));
+        try
+        {
+            var generatedPath = Path.Combine(tempRoot, "generated.lua");
+            var smokePath = Path.Combine(tempRoot, "smoke.lua");
+            var modulePath = Path.Combine(tempRoot, "SpawnScripts", "Generic", "QuestModule.lua");
+            await File.WriteAllTextAsync(modulePath, QuestModuleSmokeStubLua());
+            await File.WriteAllTextAsync(generatedPath, new ModuleLuaGenerator().Generate(BuildModuleLuaSmokeSpec()));
+            await File.WriteAllTextAsync(smokePath, """
+                package.path = "./?.lua;./?/init.lua;" .. package.path
+                dofile("generated.lua")
+                dofile("generated.lua")
+                Init({})
+                assert(#QuestModule.added == 4, "expected Init to add 4 smoke steps, got " .. tostring(#QuestModule.added))
+                print("lua smoke ok")
+                """);
+
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo(luaExecutable)
+            {
+                WorkingDirectory = tempRoot,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+            process.StartInfo.ArgumentList.Add(smokePath);
+            process.Start();
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            Assert.True(process.ExitCode == 0, stdout + stderr);
+            Assert.Contains("lua smoke ok", stdout);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ValidatorWarnsWhenModuleLuaQuestModuleIsMissing()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-module-validation-" + Guid.NewGuid().ToString("N"));
+        var spec = BuildResolvedSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+        spec.Output.ContentRoot = tempRoot;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        AssertDiagnostic(
+            diagnostics,
+            QuestDiagnosticSeverity.Warning,
+            "MODULE_LUA_MISSING_QUEST_MODULE",
+            "QuestModule.lua");
+    }
+
+    [Fact]
+    public void ValidatorFlagsDuplicateModuleLuaStepIds()
+    {
+        var spec = BuildResolvedSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+        spec.Stages[1].Steps[0].Number = spec.Stages[0].Steps[0].Number;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        AssertDiagnostic(
+            diagnostics,
+            QuestDiagnosticSeverity.Blocker,
+            "DUPLICATE_STEP_ID",
+            "Step id 1 is used more than once");
+    }
+
+    [Fact]
+    public void ValidatorFlagsNonContiguousModuleLuaStages()
+    {
+        var spec = BuildResolvedSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+        spec.Stages[1].Number = 3;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        AssertDiagnostic(
+            diagnostics,
+            QuestDiagnosticSeverity.Blocker,
+            "MODULE_LUA_STAGE_SEQUENCE",
+            "numbered 1 through 2");
+    }
+
+    [Fact]
+    public void ValidatorFlagsInvalidStepQuantityRange()
+    {
+        var spec = BuildQuantityRangeModuleSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+        spec.Stages[0].Steps[0].QuantityMin = 20;
+        spec.Stages[0].Steps[0].QuantityMax = 15;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        AssertDiagnostic(
+            diagnostics,
+            QuestDiagnosticSeverity.Blocker,
+            "STEP_QUANTITY_RANGE",
+            "minimum quantity 20 is greater than maximum quantity 15");
+    }
+
+    [Fact]
+    public void ValidatorAllowsLegacyStepQuantityRangeForCompatibility()
+    {
+        var spec = BuildQuantityRangeModuleSpec();
+        spec.GenerationMode = QuestGenerationMode.LegacySpawnStub;
+        spec.Stages[0].Steps[0].QuantityMin = 20;
+        spec.Stages[0].Steps[0].QuantityMax = 15;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Code == "STEP_QUANTITY_RANGE");
+    }
+
+    [Fact]
+    public void ValidatorFlagsInvalidRandomOptionQuantityRange()
+    {
+        var spec = BuildRandomModuleSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+        spec.Stages[0].Steps[0].RandomOptions[0].QuantityMin = 8;
+        spec.Stages[0].Steps[0].RandomOptions[0].QuantityMax = 5;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        AssertDiagnostic(
+            diagnostics,
+            QuestDiagnosticSeverity.Blocker,
+            "STEP_OPTION_QUANTITY_RANGE",
+            "minimum quantity 8 is greater than maximum quantity 5");
+    }
+
+    [Fact]
+    public void ValidatorAllowsLegacyRandomOptionQuantityRangeForCompatibility()
+    {
+        var spec = BuildRandomModuleSpec();
+        spec.GenerationMode = QuestGenerationMode.LegacySpawnStub;
+        spec.Stages[0].Steps[0].RandomOptions[0].QuantityMin = 8;
+        spec.Stages[0].Steps[0].RandomOptions[0].QuantityMax = 5;
+
+        var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Code == "STEP_OPTION_QUANTITY_RANGE");
+    }
+
+    [Fact]
+    public async Task GenerateFromSpecAsyncLegacyWritesDespiteUnresolvedTargetBlocker()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-legacy-blocker-" + Guid.NewGuid().ToString("N"));
+        var spec = BuildWritableWorkflowSpec(tempRoot, QuestGenerationMode.LegacySpawnStub);
+        spec.Stages[0].Steps[0].Target = ResolvedReference.Missing("npc", "missing target");
+        Directory.CreateDirectory(Path.GetDirectoryName(spec.Output.PreviewPath)!);
+        try
+        {
+            var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Code == "STEP_TARGET");
+
+            await new QuestWorkflow().GenerateFromSpecAsync(spec, overwrite: true);
+
+            Assert.True(File.Exists(spec.Output.LuaPath));
+            Assert.True(File.Exists(spec.Output.SpecPath));
+            Assert.True(File.Exists(spec.Output.SqlPath));
+            Assert.True(File.Exists(spec.Output.MissingReportPath));
+            Assert.True(File.Exists(spec.Output.SpawnScriptPath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GenerateFromSpecAsyncModuleLuaDefaultWritesDespiteAcknowledgedModuleBlocker()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-module-default-blocker-" + Guid.NewGuid().ToString("N"));
+        var spec = BuildWritableWorkflowSpec(tempRoot, QuestGenerationMode.ModuleLua);
+        spec.Stages[1].Steps[0].Number = spec.Stages[0].Steps[0].Number;
+        Directory.CreateDirectory(Path.GetDirectoryName(spec.Output.PreviewPath)!);
+        try
+        {
+            var diagnostics = QuestSpecValidator.Validate(spec, overwrite: true);
+            Assert.Contains(diagnostics, diagnostic => diagnostic.Code == "DUPLICATE_STEP_ID");
+
+            await new QuestWorkflow().GenerateFromSpecAsync(spec, overwrite: true);
+
+            Assert.True(File.Exists(spec.Output.LuaPath));
+            Assert.True(File.Exists(spec.Output.SpecPath));
+            Assert.True(File.Exists(spec.Output.SqlPath));
+            Assert.True(File.Exists(spec.Output.MissingReportPath));
+            Assert.True(File.Exists(spec.Output.SpawnScriptPath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GenerateFromSpecAsyncModuleLuaStrictBlockerThrowsBeforeWriting()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-module-strict-blocker-" + Guid.NewGuid().ToString("N"));
+        var spec = BuildWritableWorkflowSpec(tempRoot, QuestGenerationMode.ModuleLua);
+        spec.Stages[1].Steps[0].Number = spec.Stages[0].Steps[0].Number;
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new QuestWorkflow().GenerateFromSpecAsync(
+                    spec,
+                    overwrite: true,
+                    CancellationToken.None,
+                    QuestGenerationMode.ModuleLua,
+                    strictModuleLuaValidation: true));
+
+            Assert.Contains("DUPLICATE_STEP_ID", exception.Message);
+            Assert.False(File.Exists(spec.Output.PreviewPath));
+            Assert.False(File.Exists(spec.Output.LuaPath));
+            Assert.False(File.Exists(spec.Output.SpecPath));
+            Assert.False(File.Exists(spec.Output.SqlPath));
+            Assert.False(File.Exists(spec.Output.MissingReportPath));
+            Assert.False(File.Exists(spec.Output.SpawnScriptPath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SpawnScriptGeneratorCreatesFlexibleQuestStarterExample()
     {
         var spec = BuildResolvedSpec();
@@ -393,6 +800,525 @@ public sealed class QuestParserCoreTests
         var quest = JsonSerializer.Deserialize<CensusQuestResponse>(SampleRandomKillQuestJson(), JsonOptions())!.QuestList[0];
         var givers = JsonSerializer.Deserialize<CensusQuestGiverResponse>(SampleRandomKillQuestGiverJson(), JsonOptions())!.QuestGiverList;
         return new QuestSpecFactory().Create(new CensusQuestImport(quest, givers), Path.Combine(Path.GetTempPath(), "eq2-content-test"), "Tester");
+    }
+
+    private static QuestSpec BuildAllStepTypesSpec()
+    {
+        var steps = Enum.GetValues<StepType>().Select((type, index) => new QuestStepSpec
+        {
+            Number = index + 1,
+            Type = type,
+            Description = $"{type} step",
+            CompletedDescription = $"{type} complete",
+            QuantityMax = 1,
+            IconId = 1,
+            Target = ResolvedReference.Resolved(QuestSpecFactory.KindForStepType(type), $"{type} target", 1000 + index, $"{type} target"),
+            Location = type switch
+            {
+                StepType.Location => new LocationTarget { X = 10.125f, Y = 20.25f, Z = -30.375f, Radius = 15.125f },
+                StepType.ZoneLocation => new LocationTarget
+                {
+                    X = 40.125f,
+                    Y = 50.25f,
+                    Z = 60.375f,
+                    Radius = 25.125f,
+                    Zone = ResolvedReference.Resolved("zone", "Commonlands", 12, "Commonlands")
+                },
+                _ => null
+            }
+        }).ToList();
+
+        return new QuestSpec
+        {
+            Quest = new QuestMetadata { Name = "All Step Types", Zone = "Commonlands", CompletionText = "Done." },
+            QuestId = ResolvedReference.Resolved("quest", "All Step Types", 9003, "All Step Types"),
+            Stages =
+            [
+                new QuestStageSpec
+                {
+                    Number = 1,
+                    Description = "All step types.",
+                    CompletedDescription = "All step types complete.",
+                    Steps = steps
+                }
+            ]
+        };
+    }
+
+    private static QuestSpec BuildLocationSpec()
+    {
+        return new QuestSpec
+        {
+            Quest = new QuestMetadata { Name = "Location Quest", Zone = "Commonlands", CompletionText = "Done." },
+            QuestId = ResolvedReference.Resolved("quest", "Location Quest", 9004, "Location Quest"),
+            Stages =
+            [
+                new QuestStageSpec
+                {
+                    Number = 1,
+                    Description = "Visit places.",
+                    CompletedDescription = "Visited places.",
+                    Steps =
+                    [
+                        new QuestStepSpec
+                        {
+                            Number = 1,
+                            Type = StepType.Location,
+                            Description = "Visit a place",
+                            CompletedDescription = "Visited a place.",
+                            IconId = 12,
+                            Location = new LocationTarget { X = 1.234f, Y = 2, Z = -3.456f, Radius = 12.345f }
+                        },
+                        new QuestStepSpec
+                        {
+                            Number = 2,
+                            Type = StepType.ZoneLocation,
+                            Description = "Visit a zone place",
+                            CompletedDescription = "Visited a zone place.",
+                            IconId = 13,
+                            Location = new LocationTarget
+                            {
+                                X = 4,
+                                Y = 5.5f,
+                                Z = 6,
+                                Radius = 25,
+                                Zone = ResolvedReference.Resolved("zone", "Commonlands", 12, "Commonlands")
+                            }
+                        }
+                    ]
+                }
+            ]
+        };
+    }
+
+    private static QuestSpec BuildQuantityRangeModuleSpec()
+    {
+        return new QuestSpec
+        {
+            Quest = new QuestMetadata { Name = "Module Range Quest", Zone = "Commonlands", CompletionText = "Done." },
+            QuestId = ResolvedReference.Resolved("quest", "Module Range Quest", 9007, "Module Range Quest"),
+            Stages =
+            [
+                new QuestStageSpec
+                {
+                    Number = 1,
+                    Description = "Kill a ranged quantity.",
+                    CompletedDescription = "Killed a ranged quantity.",
+                    Steps =
+                    [
+                        new QuestStepSpec
+                        {
+                            Number = 1,
+                            Type = StepType.Kill,
+                            Description = "Kill tier 2 creatures",
+                            CompletedDescription = "Killed tier 2 creatures.",
+                            QuantityMin = 15,
+                            QuantityMax = 20,
+                            IconId = 611,
+                            Target = ResolvedReference.Resolved("npc", "tier 2 creatures", 330001, "tier 2 creatures")
+                        }
+                    ]
+                }
+            ]
+        };
+    }
+
+    private static QuestSpec BuildRandomModuleSpec()
+    {
+        return new QuestSpec
+        {
+            Quest = new QuestMetadata { Name = "Random Module Quest", Zone = "Commonlands", CompletionText = "Done." },
+            QuestId = ResolvedReference.Resolved("quest", "Random Module Quest", 9005, "Random Module Quest"),
+            Stages =
+            [
+                new QuestStageSpec
+                {
+                    Number = 1,
+                    Description = "Kill one random target.",
+                    CompletedDescription = "Killed one random target.",
+                    Steps =
+                    [
+                        new QuestStepSpec
+                        {
+                            Number = 1,
+                            Type = StepType.Kill,
+                            Description = "Kill a random target",
+                            CompletedDescription = "Killed a random target.",
+                            QuantityMax = 1,
+                            IconId = 611,
+                            RandomOptions =
+                            [
+                                new QuestStepOptionSpec
+                                {
+                                    Description = "Kill stone beetles",
+                                    CompletedDescription = "Killed stone beetles.",
+                                    QuantityMin = 3,
+                                    QuantityMax = 5,
+                                    Percentage = 100,
+                                    IconId = 611,
+                                    Target = ResolvedReference.Resolved("npc", "stone beetles", 330070, "stone beetles")
+                                },
+                                new QuestStepOptionSpec
+                                {
+                                    Description = "Kill dervish cutthroats",
+                                    CompletedDescription = "Killed dervish cutthroats.",
+                                    QuantityMax = 7,
+                                    Percentage = 100,
+                                    IconId = 611,
+                                    Target = ResolvedReference.Resolved("npc", "dervish cutthroats", 330092, "dervish cutthroats")
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+    }
+
+    private static QuestSpec BuildTargetlessBasicSpec()
+    {
+        return new QuestSpec
+        {
+            Quest = new QuestMetadata { Name = "Basic Step Quest", Zone = "Commonlands", CompletionText = "Done." },
+            QuestId = ResolvedReference.Resolved("quest", "Basic Step Quest", 9007, "Basic Step Quest"),
+            Stages =
+            [
+                new QuestStageSpec
+                {
+                    Number = 1,
+                    Description = "Do something.",
+                    CompletedDescription = "Did something.",
+                    Steps =
+                    [
+                        new QuestStepSpec
+                        {
+                            Number = 1,
+                            Type = StepType.Generic,
+                            Description = "Do something",
+                            CompletedDescription = "Did something.",
+                            QuantityMax = 1,
+                            IconId = 1
+                        }
+                    ]
+                }
+            ]
+        };
+    }
+
+    private static QuestSpec BuildModuleLuaSmokeSpec()
+    {
+        var spec = BuildRandomModuleSpec();
+        spec.Quest.Name = "Module Lua Smoke";
+        spec.QuestId = ResolvedReference.Resolved("quest", "Module Lua Smoke", 9006, "Module Lua Smoke");
+        spec.Stages[0].Steps.Insert(0, new QuestStepSpec
+        {
+            Number = 1,
+            Type = StepType.Kill,
+            Description = "Kill a target",
+            CompletedDescription = "Killed a target.",
+            QuantityMax = 2,
+            IconId = 611,
+            Target = ResolvedReference.Resolved("npc", "a target", 330001, "a target")
+        });
+        spec.Stages[0].Steps.Insert(1, new QuestStepSpec
+        {
+            Number = 2,
+            Type = StepType.ZoneLocation,
+            Description = "Visit a zone location",
+            CompletedDescription = "Visited a zone location.",
+            IconId = 12,
+            Location = new LocationTarget
+            {
+                X = 10,
+                Y = 20,
+                Z = 30,
+                Radius = 15,
+                Zone = ResolvedReference.Resolved("zone", "Commonlands", 12, "Commonlands")
+            }
+        });
+        spec.Stages[0].Steps[2].Number = 3;
+        spec.Stages[0].Steps.Add(new QuestStepSpec
+        {
+            Number = 4,
+            Type = StepType.Generic,
+            Description = "Do a basic task",
+            CompletedDescription = "Did a basic task.",
+            QuantityMax = 1,
+            IconId = 1
+        });
+        return spec;
+    }
+
+    private static string? FindLuaExecutable()
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        string[] candidates = ["lua.exe", "lua", "lua54.exe", "lua54", "lua53.exe", "lua53", "luajit.exe", "luajit"];
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var cleanDirectory = directory.Trim('"');
+            foreach (var candidate in candidates)
+            {
+                var fullPath = Path.Combine(cleanDirectory, candidate);
+                if (File.Exists(fullPath))
+                    return fullPath;
+            }
+        }
+
+        return null;
+    }
+
+    private static string QuestModuleSmokeStubLua() => """
+        QuestModule = QuestModule or {}
+        QuestModule.added = {}
+
+        local targetStepTypes = {
+            basic = false,
+            chat = true,
+            craft = true,
+            harvest = true,
+            kill = true,
+            killByRace = true,
+            obtainItem = true,
+            spell = true
+        }
+
+        local locationStepTypes = {
+            location = true,
+            zoneLoc = true
+        }
+
+        local preservedRandomFields = {
+            "id",
+            "type",
+            "complete",
+            "progress",
+            "failed",
+            "manualComplete"
+        }
+
+        local function requireText(step, field)
+            assert(type(step[field]) == "string" and step[field] ~= "", "missing " .. field .. " on step " .. tostring(step.id))
+        end
+
+        local function validateCount(step)
+            local count = step.count
+            if type(count) == "number" then
+                assert(count > 0, "step " .. tostring(step.id) .. " count must be positive")
+                return
+            end
+
+            assert(type(count) == "table", "step " .. tostring(step.id) .. " count must be a number or range table")
+            assert(type(count.min) == "number" and count.min > 0, "step " .. tostring(step.id) .. " count.min must be positive")
+            assert(type(count.max) == "number" and count.max >= count.min, "step " .. tostring(step.id) .. " count.max must be >= count.min")
+        end
+
+        local function validateTargets(step, required)
+            if step.targets == nil then
+                assert(not required, "step " .. tostring(step.id) .. " requires targets")
+                return
+            end
+
+            assert(type(step.targets) == "table" and #step.targets > 0, "step " .. tostring(step.id) .. " targets must be a non-empty array")
+            for i = 1, #step.targets do
+                assert(type(step.targets[i]) == "number" and step.targets[i] > 0, "step " .. tostring(step.id) .. " target must be positive")
+            end
+        end
+
+        local function validateLocations(step)
+            assert(step.targets == nil, "location step " .. tostring(step.id) .. " must not emit targets")
+            assert(type(step.maxVariation) == "number" and step.maxVariation > 0, "location step " .. tostring(step.id) .. " requires maxVariation")
+            assert(type(step.locations) == "table" and #step.locations > 0, "location step " .. tostring(step.id) .. " requires locations")
+            for i = 1, #step.locations do
+                local location = step.locations[i]
+                assert(type(location.x) == "number", "location x required")
+                assert(type(location.y) == "number", "location y required")
+                assert(type(location.z) == "number", "location z required")
+                if step.type == "zoneLoc" then
+                    assert(type(location.zone) == "number" and location.zone > 0, "zoneLoc requires zone")
+                else
+                    assert(location.zone == nil, "location must not emit zone")
+                end
+            end
+        end
+
+        local function mergeRandomOption(step, option)
+            local merged = {}
+            for key, value in pairs(step) do
+                merged[key] = value
+            end
+            for key, value in pairs(option) do
+                merged[key] = value
+            end
+            for i = 1, #preservedRandomFields do
+                local key = preservedRandomFields[i]
+                merged[key] = step[key]
+            end
+            merged.randomOptions = nil
+            return merged
+        end
+
+        local validateStep
+
+        local function validateRandomOptions(step)
+            if step.randomOptions == nil then
+                return false
+            end
+
+            assert(type(step.randomOptions) == "table" and #step.randomOptions > 0, "step " .. tostring(step.id) .. " randomOptions must be non-empty")
+            assert(step.targets == nil, "random parent step " .. tostring(step.id) .. " must not emit targets")
+            for i = 1, #step.randomOptions do
+                assert(type(step.randomOptions[i]) == "table", "random option must be a table")
+                validateStep(mergeRandomOption(step, step.randomOptions[i]))
+            end
+            return true
+        end
+
+        validateStep = function(step)
+            assert(type(step.id) == "number" and step.id > 0, "step requires id")
+            assert(targetStepTypes[step.type] ~= nil or locationStepTypes[step.type] ~= nil, "unsupported type " .. tostring(step.type))
+            validateCount(step)
+            requireText(step, "taskGroupText")
+            requireText(step, "taskGroupDescription")
+            requireText(step, "completeText")
+            requireText(step, "completeDescription")
+            requireText(step, "completeTaskGroup")
+            if step.completeTaskGroupDescription ~= nil then
+                requireText(step, "completeTaskGroupDescription")
+            end
+
+            if validateRandomOptions(step) then
+                return
+            end
+
+            if locationStepTypes[step.type] then
+                validateLocations(step)
+            else
+                validateTargets(step, targetStepTypes[step.type])
+            end
+        end
+
+        function QuestModule.ExportStepHandlers(steps, options)
+            local overwrite = type(options) == "table" and options.overwrite == true
+            for _, step in ipairs(steps) do
+                validateStep(step)
+                assert(overwrite or _G[step.complete] == nil, "duplicate step handler " .. tostring(step.complete))
+                _G[step.complete] = function(Quest, QuestGiver, Player)
+                    if type(step.onComplete) == "function" then
+                        step.onComplete(Quest, QuestGiver, Player)
+                    end
+                end
+            end
+        end
+
+        function QuestModule.AddSteps(Quest, steps)
+            for _, step in ipairs(steps) do
+                validateStep(step)
+                QuestModule.added[#QuestModule.added + 1] = step
+            end
+        end
+
+        function QuestModule.ReloadByStep()
+            return true
+        end
+        """;
+
+    private static int CountOccurrences(string value, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
+    }
+
+    private static void AssertDiagnostic(
+        IEnumerable<QuestDiagnostic> diagnostics,
+        QuestDiagnosticSeverity severity,
+        string code,
+        string messageFragment)
+    {
+        Assert.Contains(
+            diagnostics,
+            diagnostic => diagnostic.Severity == severity
+                && diagnostic.Code == code
+                && diagnostic.Message.Contains(messageFragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static QuestSpec BuildWritableWorkflowSpec(string tempRoot, QuestGenerationMode generationMode)
+    {
+        var questDirectory = Path.Combine(tempRoot, "content", "Quests", "Commonlands");
+        var spawnDirectory = Path.Combine(tempRoot, "content", "SpawnScripts", "Commonlands");
+        var previewDirectory = Path.Combine(tempRoot, "preview");
+        var baseName = "workflow_blocker";
+        return new QuestSpec
+        {
+            GenerationMode = generationMode,
+            Quest = new QuestMetadata
+            {
+                Name = "Workflow Blocker",
+                Zone = "Commonlands",
+                CompletionText = "Done."
+            },
+            QuestId = ResolvedReference.Resolved("quest", "Workflow Blocker", 9009, "Workflow Blocker"),
+            Giver = ResolvedReference.Resolved("npc", "Quest Giver", 331133, "Quest Giver"),
+            Output = new OutputPaths
+            {
+                ContentRoot = Path.Combine(tempRoot, "content"),
+                QuestDirectory = questDirectory,
+                LuaPath = Path.Combine(questDirectory, baseName + ".lua"),
+                SpecPath = Path.Combine(questDirectory, baseName + ".quest.json"),
+                SqlPath = Path.Combine(questDirectory, baseName + ".quest.sql"),
+                MissingReportPath = Path.Combine(questDirectory, baseName + ".missing.md"),
+                PreviewPath = Path.Combine(previewDirectory, baseName + ".lua"),
+                SpawnScriptPath = Path.Combine(spawnDirectory, "QuestGiver.example.lua")
+            },
+            Stages =
+            [
+                new QuestStageSpec
+                {
+                    Number = 1,
+                    Description = "First stage.",
+                    CompletedDescription = "First stage done.",
+                    Steps =
+                    [
+                        new QuestStepSpec
+                        {
+                            Number = 1,
+                            Type = StepType.Kill,
+                            Description = "Kill a target",
+                            CompletedDescription = "Killed a target.",
+                            QuantityMax = 1,
+                            Target = ResolvedReference.Resolved("npc", "target one", 330001, "target one")
+                        }
+                    ]
+                },
+                new QuestStageSpec
+                {
+                    Number = 2,
+                    Description = "Second stage.",
+                    CompletedDescription = "Second stage done.",
+                    Steps =
+                    [
+                        new QuestStepSpec
+                        {
+                            Number = 2,
+                            Type = StepType.Kill,
+                            Description = "Kill another target",
+                            CompletedDescription = "Killed another target.",
+                            QuantityMax = 1,
+                            Target = ResolvedReference.Resolved("npc", "target two", 330002, "target two")
+                        }
+                    ]
+                }
+            ]
+        };
     }
 
     private static QuestSpec BuildResolvedSpec()

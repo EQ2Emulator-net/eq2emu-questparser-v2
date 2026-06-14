@@ -35,6 +35,7 @@ public sealed record QuestParserUiSettings
     public bool CensusIncludeServiceId { get; init; } = Defaults.CensusIncludeServiceId;
     public string CensusLocalDirectory { get; init; } = Defaults.CensusLocalDirectory ?? "";
     public string CensusCacheDirectory { get; init; } = Defaults.CensusCacheDirectory;
+    public QuestGenerationMode GenerationMode { get; init; } = QuestGenerationMode.LegacySpawnStub;
 
     public bool UseDatabaseConnection { get; init; } = Defaults.HasDatabaseConfiguration;
     public bool UseDbConnectionString { get; init; } = !string.IsNullOrWhiteSpace(Defaults.DbConnectionString);
@@ -198,7 +199,7 @@ public sealed record QuestParserUiSettings
         if (string.IsNullOrWhiteSpace(location))
             location = "(not set)";
 
-        return $"Content root: {settings.ContentRoot} | Quest source: {settings.SourceKind} | {location} | Census cache: {settings.CensusCacheDirectory} | {settings.DatabaseSummary()}";
+        return $"Content root: {settings.ContentRoot} | Quest source: {settings.SourceKind} | {location} | Census cache: {settings.CensusCacheDirectory} | Lua generation: {DisplayName(settings.GenerationMode)} | {settings.DatabaseSummary()}";
     }
 
     public string DatabaseSummary()
@@ -252,6 +253,7 @@ public sealed record QuestParserUiSettings
             CensusIncludeServiceId = CensusIncludeServiceId,
             CensusLocalDirectory = censusLocalDirectory,
             CensusCacheDirectory = Clean(CensusCacheDirectory, Defaults.CensusCacheDirectory),
+            GenerationMode = Enum.IsDefined(GenerationMode) ? GenerationMode : QuestGenerationMode.LegacySpawnStub,
             DbConnectionString = CleanOptional(DbConnectionString),
             DbHost = CleanOptional(DbHost),
             DbPort = DbPort == 0 ? Defaults.DefaultDbPort : DbPort,
@@ -316,5 +318,14 @@ public sealed record QuestParserUiSettings
             return fallback;
 
         return Math.Clamp(value, min, max);
+    }
+
+    private static string DisplayName(QuestGenerationMode mode)
+    {
+        return mode switch
+        {
+            QuestGenerationMode.ModuleLua => "Quest module Lua",
+            _ => "Legacy spawn stub"
+        };
     }
 }

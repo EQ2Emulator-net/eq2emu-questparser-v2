@@ -73,6 +73,13 @@
                     </StackPanel>
                 </GroupBox>
 
+                <GroupBox Header="Quest Generation" Padding="12">
+                    <Grid ColumnDefinitions="170,*" RowDefinitions="Auto" ColumnSpacing="12" RowSpacing="10">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Lua generation" VerticalAlignment="Center" />
+                        <ComboBox Grid.Row="0" Grid.Column="1" Name="GenerationModeBox" Width="220" HorizontalAlignment="Left" />
+                    </Grid>
+                </GroupBox>
+
                 <GroupBox Header="Database Resolution" Padding="12">
                     <StackPanel Spacing="10">
                         <CheckBox Name="UseDatabaseConnectionBox" Content="Use MariaDB for automatic quest, NPC, item, spell, faction, race, and zone ID resolution" />

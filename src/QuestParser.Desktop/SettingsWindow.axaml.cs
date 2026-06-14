@@ -8,6 +8,12 @@ namespace QuestParser.Desktop;
 
 public partial class SettingsWindow : Window
 {
+    private static readonly GenerationModeChoice[] GenerationModes =
+    [
+        new(QuestGenerationMode.LegacySpawnStub, "Legacy spawn stub"),
+        new(QuestGenerationMode.ModuleLua, "Quest module Lua")
+    ];
+
     private bool _testingDatabase;
 
     public SettingsWindow()
@@ -20,6 +26,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
 
         CensusSourceBox.ItemsSource = Enum.GetValues<CensusSourceKind>();
+        GenerationModeBox.ItemsSource = GenerationModes;
         ApplySettingsToControls(settings.Normalize());
 
         BrowseContentRootButton.Click += async (_, _) => await BrowseFolderIntoAsync(ContentRootBox, "Choose EQ2Emu content root");
@@ -55,6 +62,7 @@ public partial class SettingsWindow : Window
         CensusIncludeServiceIdBox.IsChecked = settings.CensusIncludeServiceId;
         CensusLocalDirectoryBox.Text = settings.CensusLocalDirectory;
         CensusCacheDirectoryBox.Text = settings.CensusCacheDirectory;
+        GenerationModeBox.SelectedItem = GenerationModes.FirstOrDefault(choice => choice.Mode == settings.GenerationMode) ?? GenerationModes[0];
         UseDatabaseConnectionBox.IsChecked = settings.UseDatabaseConnection;
         UseDbConnectionStringBox.IsChecked = settings.UseDbConnectionString;
         DbConnectionStringBox.Text = settings.DbConnectionString;
@@ -97,6 +105,7 @@ public partial class SettingsWindow : Window
             CensusIncludeServiceId = IsChecked(CensusIncludeServiceIdBox),
             CensusLocalDirectory = CleanOptional(CensusLocalDirectoryBox.Text),
             CensusCacheDirectory = Clean(CensusCacheDirectoryBox.Text, Defaults.CensusCacheDirectory),
+            GenerationMode = CurrentGenerationMode(),
             UseDatabaseConnection = IsChecked(UseDatabaseConnectionBox),
             UseDbConnectionString = IsChecked(UseDbConnectionStringBox),
             DbConnectionString = CleanOptional(DbConnectionStringBox.Text),
@@ -194,6 +203,13 @@ public partial class SettingsWindow : Window
         return CensusSourceBox.SelectedItem is CensusSourceKind kind ? kind : CensusSourceKind.Daybreak;
     }
 
+    private QuestGenerationMode CurrentGenerationMode()
+    {
+        return GenerationModeBox.SelectedItem is GenerationModeChoice choice
+            ? choice.Mode
+            : QuestGenerationMode.LegacySpawnStub;
+    }
+
     private string CurrentSourceLocation(CensusSourceKind source)
     {
         return source switch
@@ -276,5 +292,10 @@ public partial class SettingsWindow : Window
     private static string CleanOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
+    }
+
+    private sealed record GenerationModeChoice(QuestGenerationMode Mode, string Label)
+    {
+        public override string ToString() => Label;
     }
 }

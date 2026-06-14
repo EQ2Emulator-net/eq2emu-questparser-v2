@@ -4,10 +4,19 @@ namespace QuestParser.Core;
 
 public sealed class QuestWorkflow
 {
+    private static readonly HashSet<string> StrictModuleLuaBlockerCodes = new(StringComparer.Ordinal)
+    {
+        "DUPLICATE_STEP_ID",
+        "MODULE_LUA_STAGE_SEQUENCE",
+        "STEP_QUANTITY_RANGE",
+        "STEP_OPTION_QUANTITY_RANGE"
+    };
+
     private readonly ICensusClient _censusClient;
     private readonly QuestSpecFactory _specFactory;
     private readonly IQuestDatabaseResolver _resolver;
     private readonly LuaGenerator _luaGenerator;
+    private readonly ModuleLuaGenerator _moduleLuaGenerator;
     private readonly SpawnScriptGenerator _spawnScriptGenerator;
     private readonly SqlReportGenerator _sqlReportGenerator;
     private readonly QuestTemplateFactory _templateFactory = new();
@@ -18,12 +27,14 @@ public sealed class QuestWorkflow
         IQuestDatabaseResolver? resolver = null,
         LuaGenerator? luaGenerator = null,
         SpawnScriptGenerator? spawnScriptGenerator = null,
-        SqlReportGenerator? sqlReportGenerator = null)
+        SqlReportGenerator? sqlReportGenerator = null,
+        ModuleLuaGenerator? moduleLuaGenerator = null)
     {
         _censusClient = censusClient ?? CensusClientFactory.CreateDefault();
         _specFactory = specFactory ?? new QuestSpecFactory();
         _resolver = resolver ?? QuestDatabaseResolverFactory.CreateDefault();
         _luaGenerator = luaGenerator ?? new LuaGenerator();
+        _moduleLuaGenerator = moduleLuaGenerator ?? new ModuleLuaGenerator();
         _spawnScriptGenerator = spawnScriptGenerator ?? new SpawnScriptGenerator();
         _sqlReportGenerator = sqlReportGenerator ?? new SqlReportGenerator();
     }
@@ -50,9 +61,31 @@ public sealed class QuestWorkflow
         return new QuestWorkflowResult { Spec = spec, WrittenFiles = [spec.Output.SpecPath] };
     }
 
-    public async Task<QuestWorkflowResult> GenerateAsync(string specPath, bool overwrite = false, CancellationToken cancellationToken = default)
+    public Task<QuestWorkflowResult> GenerateAsync(string specPath, bool overwrite = false, CancellationToken cancellationToken = default)
+    {
+        return GenerateCoreAsync(specPath, overwrite, generationMode: null, strictModuleLuaValidation: false, cancellationToken);
+    }
+
+    public Task<QuestWorkflowResult> GenerateAsync(
+        string specPath,
+        bool overwrite,
+        CancellationToken cancellationToken,
+        QuestGenerationMode? generationMode,
+        bool strictModuleLuaValidation = false)
+    {
+        return GenerateCoreAsync(specPath, overwrite, generationMode, strictModuleLuaValidation, cancellationToken);
+    }
+
+    private async Task<QuestWorkflowResult> GenerateCoreAsync(
+        string specPath,
+        bool overwrite,
+        QuestGenerationMode? generationMode,
+        bool strictModuleLuaValidation,
+        CancellationToken cancellationToken)
     {
         var spec = await ReadSpecAsync(specPath, cancellationToken).ConfigureAwait(false);
+        ApplyGenerationMode(spec, generationMode);
+        ThrowIfStrictModuleLuaBlockingDiagnostics(spec, overwrite, strictModuleLuaValidation);
         var preview = Preview(spec);
         var lua = preview.Lua;
         var spawnScript = preview.SpawnScript;
@@ -65,15 +98,39 @@ public sealed class QuestWorkflow
     public QuestWorkflowResult Preview(QuestSpec spec)
     {
         EnsureSpawnScriptPath(spec);
-        var lua = _luaGenerator.Generate(spec);
+        var lua = spec.GenerationMode == QuestGenerationMode.ModuleLua
+            ? _moduleLuaGenerator.Generate(spec)
+            : _luaGenerator.Generate(spec);
         var spawnScript = _spawnScriptGenerator.Generate(spec);
         var sql = _sqlReportGenerator.GenerateSql(spec);
         var missing = _sqlReportGenerator.GenerateMissingReport(spec);
         return new QuestWorkflowResult { Spec = spec, Lua = lua, SpawnScript = spawnScript, Sql = sql, MissingReport = missing };
     }
 
-    public async Task<QuestWorkflowResult> GenerateFromSpecAsync(QuestSpec spec, bool overwrite = false, CancellationToken cancellationToken = default)
+    public Task<QuestWorkflowResult> GenerateFromSpecAsync(QuestSpec spec, bool overwrite = false, CancellationToken cancellationToken = default)
     {
+        return GenerateFromSpecCoreAsync(spec, overwrite, generationMode: null, strictModuleLuaValidation: false, cancellationToken);
+    }
+
+    public Task<QuestWorkflowResult> GenerateFromSpecAsync(
+        QuestSpec spec,
+        bool overwrite,
+        CancellationToken cancellationToken,
+        QuestGenerationMode? generationMode,
+        bool strictModuleLuaValidation = false)
+    {
+        return GenerateFromSpecCoreAsync(spec, overwrite, generationMode, strictModuleLuaValidation, cancellationToken);
+    }
+
+    private async Task<QuestWorkflowResult> GenerateFromSpecCoreAsync(
+        QuestSpec spec,
+        bool overwrite,
+        QuestGenerationMode? generationMode,
+        bool strictModuleLuaValidation,
+        CancellationToken cancellationToken)
+    {
+        ApplyGenerationMode(spec, generationMode);
+        ThrowIfStrictModuleLuaBlockingDiagnostics(spec, overwrite, strictModuleLuaValidation);
         var preview = Preview(spec);
         var written = await WriteOutputsAsync(spec, preview.Lua, preview.SpawnScript, preview.Sql, preview.MissingReport, overwrite, cancellationToken).ConfigureAwait(false);
         return new QuestWorkflowResult
@@ -87,11 +144,37 @@ public sealed class QuestWorkflow
         };
     }
 
-    public async Task<QuestWorkflowResult> CreateAsync(string questName, string? contentRoot = null, string author = "", bool overwrite = false, CancellationToken cancellationToken = default)
+    public Task<QuestWorkflowResult> CreateAsync(string questName, string? contentRoot = null, string author = "", bool overwrite = false, CancellationToken cancellationToken = default)
+    {
+        return CreateCoreAsync(questName, contentRoot, author, overwrite, generationMode: null, strictModuleLuaValidation: false, cancellationToken);
+    }
+
+    public Task<QuestWorkflowResult> CreateAsync(
+        string questName,
+        string? contentRoot,
+        string author,
+        bool overwrite,
+        CancellationToken cancellationToken,
+        QuestGenerationMode? generationMode,
+        bool strictModuleLuaValidation = false)
+    {
+        return CreateCoreAsync(questName, contentRoot, author, overwrite, generationMode, strictModuleLuaValidation, cancellationToken);
+    }
+
+    private async Task<QuestWorkflowResult> CreateCoreAsync(
+        string questName,
+        string? contentRoot,
+        string author,
+        bool overwrite,
+        QuestGenerationMode? generationMode,
+        bool strictModuleLuaValidation,
+        CancellationToken cancellationToken)
     {
         var import = await _censusClient.FetchQuestAsync(questName, cancellationToken).ConfigureAwait(false);
         var spec = _specFactory.Create(import, contentRoot ?? Defaults.ContentRoot, author);
+        ApplyGenerationMode(spec, generationMode);
         await _resolver.ResolveAsync(spec, cancellationToken).ConfigureAwait(false);
+        ThrowIfStrictModuleLuaBlockingDiagnostics(spec, overwrite, strictModuleLuaValidation);
 
         var preview = Preview(spec);
         var lua = preview.Lua;
@@ -233,6 +316,30 @@ public sealed class QuestWorkflow
     {
         if (string.IsNullOrWhiteSpace(spec.Output.SpawnScriptPath))
             spec.Output.SpawnScriptPath = SpawnScriptGenerator.BuildExamplePath(spec);
+    }
+
+    private static void ApplyGenerationMode(QuestSpec spec, QuestGenerationMode? generationMode)
+    {
+        if (generationMode.HasValue)
+            spec.GenerationMode = generationMode.Value;
+    }
+
+    private static void ThrowIfStrictModuleLuaBlockingDiagnostics(QuestSpec spec, bool overwrite, bool strictModuleLuaValidation)
+    {
+        if (!strictModuleLuaValidation || spec.GenerationMode != QuestGenerationMode.ModuleLua)
+            return;
+
+        var blockers = QuestSpecValidator.Validate(spec, overwrite)
+            .Where(diagnostic => diagnostic.Severity == QuestDiagnosticSeverity.Blocker)
+            .Where(diagnostic => StrictModuleLuaBlockerCodes.Contains(diagnostic.Code))
+            .ToArray();
+        if (blockers.Length == 0)
+            return;
+
+        var details = string.Join(
+            Environment.NewLine,
+            blockers.Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}"));
+        throw new InvalidOperationException("Validation failed:" + Environment.NewLine + details);
     }
 
     private static void UpdateTodos(QuestSpec spec)

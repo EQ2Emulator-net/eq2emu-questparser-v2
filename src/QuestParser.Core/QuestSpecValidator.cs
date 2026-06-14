@@ -17,13 +17,17 @@ public static class QuestSpecValidator
         if (spec.QuestId.Status == ResolveStatus.Proposed)
             Add(diagnostics, QuestDiagnosticSeverity.Warning, "quest", "QUEST_ID_PROPOSED", $"Quest id {spec.QuestId.Id} is proposed. Review SQL before applying DB changes.");
 
+        if (spec.GenerationMode == QuestGenerationMode.ModuleLua)
+            ValidateModuleLua(diagnostics, spec);
+
+        var validateModuleLuaQuantityRanges = spec.GenerationMode == QuestGenerationMode.ModuleLua;
         foreach (var stage in spec.Stages)
         {
             if (string.IsNullOrWhiteSpace(stage.Description))
                 Add(diagnostics, QuestDiagnosticSeverity.Warning, $"stage:{stage.Number}", "STAGE_TEXT", $"Stage {stage.Number} has no task group text.");
 
             foreach (var step in stage.Steps)
-                ValidateStep(diagnostics, stage, step);
+                ValidateStep(diagnostics, stage, step, validateModuleLuaQuantityRanges);
         }
 
         for (var i = 0; i < spec.Rewards.Items.Count; i++)
@@ -59,7 +63,7 @@ public static class QuestSpecValidator
             .ToList();
     }
 
-    private static void ValidateStep(List<QuestDiagnostic> diagnostics, QuestStageSpec stage, QuestStepSpec step)
+    private static void ValidateStep(List<QuestDiagnostic> diagnostics, QuestStageSpec stage, QuestStepSpec step, bool validateModuleLuaQuantityRanges)
     {
         var sectionKey = $"step:{step.Number}";
 
@@ -67,6 +71,8 @@ public static class QuestSpecValidator
             Add(diagnostics, QuestDiagnosticSeverity.Blocker, sectionKey, "STEP_TEXT", $"Step {step.Number} has no description.");
         if (step.QuantityMax <= 0)
             Add(diagnostics, QuestDiagnosticSeverity.Blocker, sectionKey, "STEP_QUANTITY", $"Step {step.Number} quantity must be greater than zero.");
+        if (validateModuleLuaQuantityRanges && step.QuantityMin > step.QuantityMax)
+            Add(diagnostics, QuestDiagnosticSeverity.Blocker, sectionKey, "STEP_QUANTITY_RANGE", $"Step {step.Number} minimum quantity {step.QuantityMin} is greater than maximum quantity {step.QuantityMax}.");
         if (step.Type == StepType.Generic)
             Add(diagnostics, QuestDiagnosticSeverity.Warning, sectionKey, "STEP_GENERIC", $"Step {step.Number} uses generic AddQuestStep. Verify this is intentional.");
 
@@ -89,7 +95,7 @@ public static class QuestSpecValidator
 
         if (step.HasRandomOptions)
         {
-            ValidateRandomOptions(diagnostics, step, sectionKey);
+            ValidateRandomOptions(diagnostics, step, sectionKey, validateModuleLuaQuantityRanges);
             return;
         }
 
@@ -97,7 +103,7 @@ public static class QuestSpecValidator
             AddReferenceDiagnostic(diagnostics, sectionKey, "STEP_TARGET", $"Step {step.Number} target", step.Target, allowProposed: false);
     }
 
-    private static void ValidateRandomOptions(List<QuestDiagnostic> diagnostics, QuestStepSpec step, string sectionKey)
+    private static void ValidateRandomOptions(List<QuestDiagnostic> diagnostics, QuestStepSpec step, string sectionKey, bool validateModuleLuaQuantityRanges)
     {
         for (var i = 0; i < step.RandomOptions.Count; i++)
         {
@@ -107,8 +113,56 @@ public static class QuestSpecValidator
                 Add(diagnostics, QuestDiagnosticSeverity.Blocker, optionKey, "STEP_OPTION_TEXT", $"Step {step.Number} random option {i + 1} has no description.");
             if (option.QuantityMax <= 0)
                 Add(diagnostics, QuestDiagnosticSeverity.Blocker, optionKey, "STEP_OPTION_QUANTITY", $"Step {step.Number} random option {i + 1} quantity must be greater than zero.");
+            if (validateModuleLuaQuantityRanges && option.QuantityMin > option.QuantityMax)
+                Add(diagnostics, QuestDiagnosticSeverity.Blocker, optionKey, "STEP_OPTION_QUANTITY_RANGE", $"Step {step.Number} random option {i + 1} minimum quantity {option.QuantityMin} is greater than maximum quantity {option.QuantityMax}.");
             if (QuestSpecFactory.KindForStepType(step.Type) != "generic")
                 AddReferenceDiagnostic(diagnostics, optionKey, "STEP_OPTION_TARGET", $"Step {step.Number} random option {i + 1} target", option.Target, allowProposed: false);
+        }
+    }
+
+    private static void ValidateModuleLua(List<QuestDiagnostic> diagnostics, QuestSpec spec)
+    {
+        var modulePath = Path.Combine(spec.Output.ContentRoot, "SpawnScripts", "Generic", "QuestModule.lua");
+        if (!File.Exists(modulePath))
+        {
+            Add(
+                diagnostics,
+                QuestDiagnosticSeverity.Warning,
+                "output",
+                "MODULE_LUA_MISSING_QUEST_MODULE",
+                "Deploy/copy SpawnScripts/Generic/QuestModule.lua to the content root before using generated module-lua scripts.");
+        }
+
+        var stageNumbers = spec.Stages
+            .Select(stage => stage.Number)
+            .Order()
+            .ToArray();
+        for (var i = 0; i < stageNumbers.Length; i++)
+        {
+            var expected = i + 1;
+            if (stageNumbers[i] == expected)
+                continue;
+
+            Add(
+                diagnostics,
+                QuestDiagnosticSeverity.Blocker,
+                "stages",
+                "MODULE_LUA_STAGE_SEQUENCE",
+                $"Module-lua stages must be numbered 1 through {stageNumbers.Length} without gaps; found {string.Join(", ", stageNumbers)}.");
+            break;
+        }
+
+        foreach (var duplicate in spec.Stages
+            .SelectMany(stage => stage.Steps)
+            .GroupBy(step => step.Number)
+            .Where(group => group.Count() > 1))
+        {
+            Add(
+                diagnostics,
+                QuestDiagnosticSeverity.Blocker,
+                $"step:{duplicate.Key}",
+                "DUPLICATE_STEP_ID",
+                $"Step id {duplicate.Key} is used more than once in module-lua mode. Step ids must be unique.");
         }
     }
 

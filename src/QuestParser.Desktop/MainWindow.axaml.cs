@@ -139,6 +139,7 @@ public partial class MainWindow : Window
         var resolved = await _workflow.ResolveAsync(imported.Spec.Output.SpecPath);
 
         _spec = resolved.Spec;
+        ApplySettingsGenerationModeToSpec();
         QuestNameBox.Text = _spec.Quest.Name;
         AuthorBox.Text = _spec.Quest.Author;
         _settings = _settings with { ContentRoot = _spec.Output.ContentRoot };
@@ -167,6 +168,7 @@ public partial class MainWindow : Window
             (AuthorBox.Text ?? "").Trim());
 
         _spec = result.Spec;
+        ApplySettingsGenerationModeToSpec();
         QuestNameBox.Text = _spec.Quest.Name;
         AuthorBox.Text = _spec.Quest.Author;
         _settings = _settings with { ContentRoot = _spec.Output.ContentRoot };
@@ -190,7 +192,7 @@ public partial class MainWindow : Window
 
         QuestNameBox.Text = _spec.Quest.Name;
         AuthorBox.Text = _spec.Quest.Author;
-        _settings = _settings with { ContentRoot = _spec.Output.ContentRoot };
+        _settings = _settings with { ContentRoot = _spec.Output.ContentRoot, GenerationMode = _spec.GenerationMode };
         RefreshSettingsSummary();
         SpecPathBox.Text = _spec.Output.SpecPath;
         CensusQuestBox.Text = "Loaded from spec. Quest source payload was not fetched in this session.";
@@ -209,6 +211,7 @@ public partial class MainWindow : Window
             return;
 
         SaveCurrentSection();
+        ApplySettingsGenerationModeToSpec();
         var diagnostics = QuestSpecValidator.Validate(_spec, OverwriteBox.IsChecked == true);
         RefreshDiagnostics(diagnostics);
         var blockers = diagnostics.Where(diagnostic => diagnostic.Severity == QuestDiagnosticSeverity.Blocker).ToArray();
@@ -231,7 +234,12 @@ public partial class MainWindow : Window
         }
 
         AppendLog("Generating quest Lua, spawn-starter example, SQL, spec, and missing-data report from verified UI values.");
-        var result = await _workflow.GenerateFromSpecAsync(_spec, OverwriteBox.IsChecked == true);
+        var result = await _workflow.GenerateFromSpecAsync(
+            _spec,
+            OverwriteBox.IsChecked == true,
+            CancellationToken.None,
+            _spec.GenerationMode,
+            strictModuleLuaValidation: AcknowledgeDiagnosticsBox.IsChecked != true);
         _spec = result.Spec;
         RefreshPreview();
 
@@ -286,8 +294,11 @@ public partial class MainWindow : Window
         _settings = settings.Normalize();
         await _settings.SaveAsync();
         _workflow = CreateWorkflowFromSettings();
+        ApplySettingsGenerationModeToSpec();
         RefreshSettingsSummary();
         ApplyUiSettings();
+        RefreshPreview();
+        RefreshDiagnostics();
         AppendLog("Settings updated.");
     }
 
@@ -303,6 +314,12 @@ public partial class MainWindow : Window
     {
         SettingsSummaryText.Text = _settings.Summary();
         DbConfigText.Text = _settings.DatabaseSummary();
+    }
+
+    private void ApplySettingsGenerationModeToSpec()
+    {
+        if (_spec is not null)
+            _spec.GenerationMode = _settings.Normalize().GenerationMode;
     }
 
     private void ApplyUiSettings()

@@ -315,7 +315,7 @@ public partial class MainWindow : Window
         SaveCurrentSection();
         ApplySettingsGenerationModeToSpec();
 
-        var editor = new VisualEditorWindow(_workflow, _spec, ownsSpec: false);
+        var editor = new VisualEditorWindow(_workflow, CloneSpec(_spec), ownsSpec: false);
         var result = await editor.ShowDialog<QuestSpec?>(this);
         if (result is null)
             return;
@@ -329,6 +329,13 @@ public partial class MainWindow : Window
         SelectSection(0);
         RefreshPreview();
         AppendLog("Visual editor changes returned to the QuestParser review window.");
+    }
+
+    private static QuestSpec CloneSpec(QuestSpec spec)
+    {
+        var json = JsonSerializer.Serialize(spec, QuestSpecJsonContext.Default.QuestSpec);
+        return JsonSerializer.Deserialize(json, QuestSpecJsonContext.Default.QuestSpec)
+            ?? throw new InvalidOperationException("Quest spec clone failed.");
     }
 
     private QuestWorkflow CreateWorkflowFromSettings()

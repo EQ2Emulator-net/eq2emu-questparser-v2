@@ -19,6 +19,14 @@ Build dependencies:
 
 Release desktop executables are self-contained and do not require users to install the .NET runtime.
 
+Create local GitHub release upload artifacts:
+
+```powershell
+.\scripts\Create-GitHubRelease.ps1
+```
+
+This writes the platform archives to the gitignored `github-release` folder. GitHub adds the `Source code (zip)` and `Source code (tar.gz)` rows automatically from the release tag. On Windows, double-click `Create-GitHubRelease.cmd` from the repo root for the same release build.
+
 Setup:
 
 ```powershell
@@ -140,6 +148,7 @@ Additional UI authoring helpers:
 
 - `Resolve Section` re-runs DB resolution only for the current quest ID, giver, step, or reward section.
 - `File > Settings...` includes `Lua generation`, which switches between the current legacy quest Lua/spawn-starter output and the newer shared `QuestModule` Lua output.
+- `File > Open Visual Editor...` opens the loaded quest spec in a larger graph editor window.
 - The review grid includes provenance so values can be traced to the quest source, DB resolution, generated defaults, templates, or user overrides.
 - Missing NPC references show a Missing Spawn Wizard with suggested spawn script path, Lua TODO text, and commented review-only SQL.
 - The Diagnostics tab lists blockers and warnings. Blockers must be fixed or explicitly acknowledged before generation.
@@ -167,16 +176,108 @@ Generated files:
 - `Quests\<Zone>\<quest>.quest.sql`
 - `Quests\<Zone>\<quest>.missing.md`
 
-Visual editor layout is stored inside the `.quest.json` spec under `visualEditor`. The quest spec remains the only quest-data file; no separate graph project file is required.
-
 The spawn script is an example starter scaffold for the resolved quest giver. Merge the relevant hail, click/cast, use, or item-examine hook into the live spawn or item script after review.
 
-Generation modes:
+## Visual Editor
+
+The visual editor is a graph-first editor for the same `.quest.json` spec used by the normal QuestParser review workflow. The `.quest.json` file remains the single source of truth; graph layout is stored inside that file under `visualEditor`, and there is no separate graph project file.
+
+Open it from the desktop UI:
+
+1. Load, import, or create a quest in `QuestParser.Desktop`.
+2. Use `File > Open Visual Editor...`.
+3. Edit the graph in the popup window.
+4. Click `Save` to return the changed spec to the main review window.
+5. Review diagnostics and generate files from the main window.
+
+Open it as a standalone editor:
+
+```powershell
+dotnet run --project src\QuestParser.Desktop -- --visual-editor
+dotnet run --project src\QuestParser.Desktop -- --visual-editor --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json"
+```
+
+Standalone mode can open a spec, save the spec, validate it, preview Lua/SQL/missing output, and generate files directly. When the visual editor is opened from the main QuestParser window, generation from the popup is disabled until the edited spec is saved back to the main window.
+
+Graph editing:
+
+- Double-click an item in the `Actions` palette to add a quest step to the selected stage. Supported action types match the quest parser step types: generic, chat, kill, kill self update, kill by race, obtain item, spell, craft, harvest, location, and zone location.
+- Double-click `Stage` or `Parallel Stage` in the `Flow` palette to add a stage. `Random Options` and `Comment` are visible placeholders and are not wired yet.
+- Select a node to edit it in the inspector. Stage text, completed text, parallel yes/no, step description, completed text, target search text, quantity, and step stage assignment are editable there. System fields such as selected node metadata and node kind are read-only.
+- Drag graph nodes to adjust layout. Layout changes are saved under `visualEditor` in the spec.
+- Use `Edit connections`, then select a source node and a target node. Stage-to-stage connections reorder stages. Step-to-stage connections move a step to the end of the target stage. Step-to-step connections move a step after the target step.
+- Select a stage or step and use the `Delete` button, the `Delete` key, or `Backspace` to remove it. Start, complete, and generated join nodes cannot be deleted.
+- Use `Undo` and `Redo` for graph, inspector, delete, and connection edits.
+- Use `Zoom in`, `Zoom out`, and `Center` when working with large quests or wide parallel stages.
+- Use the bottom tabs for diagnostics, walkthrough text, Lua preview, SQL preview, missing-data report, and generation log.
+- Use `Definition` to inspect the generated graph definition for the current workflow or selected node.
+
+The visual editor intentionally stays within what QuestParser can already generate. It edits stages, parser-supported step types, parallel stage flags, target search text, quantities, and layout. Advanced manual Lua behavior should still be added after generation or by extending the `.quest.json` model and generators.
+
+## QuestModule Lua
+
+QuestParser has two Lua generation modes:
 
 - `legacy-spawn-stub` is the default and preserves the current generated quest Lua plus spawn-starter workflow.
-- `module-lua` emits quest Lua that delegates step setup/reload/completion boilerplate to `SpawnScripts/Generic/QuestModule.lua`.
-- For `module-lua`, copy or keep `SpawnScripts/Generic/QuestModule.lua` in the selected content root. The CLI prints `MODULE_LUA_MISSING_QUEST_MODULE` when that file is missing.
+- `module-lua` emits quest Lua that delegates step setup/reload/completion boilerplate to `Quests/Generic/QuestModule.lua`.
 - CLI `create`/`generate --mode module-lua` uses strict module validation and will not write output when module-specific blockers such as duplicate step IDs, non-contiguous stages, or invalid quantity ranges are present.
+
+Use QuestModule mode from the desktop UI:
+
+1. Open `File > Settings...`.
+2. Set `Lua generation` to `Quest module Lua`.
+3. Confirm `Content root` points at the EQ2Emu content repository you will run on the server.
+4. In the `QuestModule` row, click `Copy` when the module is missing or outdated.
+5. Save settings, review diagnostics, then generate files normally.
+
+The settings window checks `Quests/Generic/QuestModule.lua` by SHA-256 hash against the QuestParser-bundled module. If it is missing, the copy button creates it. If it is outdated, the button updates it. The generated quest Lua uses:
+
+```lua
+require "Quests/Generic/QuestModule"
+```
+
+Use QuestModule mode from the CLI:
+
+```powershell
+dotnet run --project src\QuestParser.Cli -- create --quest "A Hunter's Tool" --author "Your Name" --mode module-lua --overwrite
+dotnet run --project src\QuestParser.Cli -- generate --spec ".\eq2emu-content\Quests\Commonlands\a_hunters_tool.quest.json" --mode module-lua --overwrite
+```
+
+The CLI does not copy the module for you. If `Quests/Generic/QuestModule.lua` is missing or does not match the bundled version, diagnostics include `MODULE_LUA_MISSING_QUEST_MODULE` or `MODULE_LUA_OUTDATED_QUEST_MODULE`.
+
+Generated QuestModule Lua is organized around stage step tables:
+
+```lua
+local STAGE_1_STEPS = {}
+local STAGE_2_STEPS = {}
+
+local ALL_STEPS = QuestModule.ExportStageStepHandlers({
+    STAGE_1_STEPS,
+    STAGE_2_STEPS,
+}, { overwrite = true })
+```
+
+You should not need to manually call `QuestModule.ExportStepHandlers` for each stage or manually append every stage into `ALL_STEPS`. The generator calls `QuestModule.ExportStageStepHandlers`, which exports all step completion callbacks and returns the combined ordered step list used by `Reload`.
+
+QuestModule handles:
+
+- `QuestModule.AddSteps(Quest, steps)` for adding a stage's steps.
+- `QuestModule.ReloadByStep(Quest, QuestGiver, Player, Step, nil, ALL_STEPS)` for reload routing.
+- `QuestModule.AllComplete(Player, questId, steps)` for parallel stages where all steps must be complete before advancing.
+- `QuestModule.OnAllComplete(...)` for custom manual all-complete checks.
+- `QuestModule.CompleteQuest(...)` for common completion description and reward handling.
+- `QuestModule.BuildNamedSteps(...)` for hand-authored step tables that still need validation and contiguous numeric IDs.
+
+Parallel stages generated in `module-lua` use `QuestModule.AllComplete` instead of writing one `QuestStepIsComplete` check per step. Each parallel step calls the stage progress handler, and the stage advances only when all step IDs in that stage table are complete.
+
+QuestModule supports the parser's generated step types: `basic`, `chat`, `kill`, `killSelfUpdate`, `killByRace`, `obtainItem`, `spell`, `craft`, `harvest`, `location`, and `zoneLoc`. It also validates callback names, target arrays, location data, random option data, and quantity ranges at load/runtime.
+
+Developer workflow for generated module Lua:
+
+1. Keep generated step tables and generated callback names intact unless you are intentionally hand-editing the quest.
+2. Resolve any generated `TODO DB` comments by fixing the `.quest.json`, DB data, or final Lua targets.
+3. Put custom quest-only behavior in the generated stage completion functions, `QuestComplete`, or explicitly manual callbacks.
+4. Keep shared step boilerplate in `Quests/Generic/QuestModule.lua` so generated quests stay consistent.
 
 The SQL file is review-only. The tool resolves from the DB but does not insert, update, or delete database rows.
 Static quest rewards are emitted as `quest_details` SQL rows instead of Lua reward calls, so applying both generated Lua and generated SQL will not duplicate rewards.

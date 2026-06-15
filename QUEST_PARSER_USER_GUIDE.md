@@ -14,7 +14,7 @@ QuestParser turns a Census quest or a manual template into reviewable EQ2Emu con
 
 The SQL is not executed by the tool. Review it before applying anything to a database.
 
-Quest Lua can be generated in two modes. `Legacy spawn stub` is the current default workflow. `Quest module Lua` writes quest scripts that use `SpawnScripts/Generic/QuestModule.lua` for repeated step setup, reload, and completion boilerplate.
+Quest Lua can be generated in two modes. `Legacy spawn stub` is the current default workflow. `Quest module Lua` writes quest scripts that use `Quests/Generic/QuestModule.lua` for repeated step setup, reload, and completion boilerplate.
 
 ## Recommended Workflow
 
@@ -63,7 +63,7 @@ Reference statuses mean:
 
 `Generate Files` is intentionally gated. The app checks for blockers such as blank quest names, missing quest givers, ambiguous/missing target IDs, invalid quantities, missing output paths, or existing Lua files when overwrite is off.
 
-Warnings are softer review items, such as blank zone text, generic quest steps, proposed quest IDs, blank SQL/missing-report paths, or a missing shared `SpawnScripts/Generic/QuestModule.lua` file when `Quest module Lua` is selected.
+Warnings are softer review items, such as blank zone text, generic quest steps, proposed quest IDs, blank SQL/missing-report paths, or a missing/outdated shared `Quests/Generic/QuestModule.lua` file when `Quest module Lua` is selected.
 
 `Quest module Lua` adds stricter module-specific blockers for duplicate step IDs, non-contiguous stage numbering, and quantity ranges where the minimum is greater than the maximum.
 
@@ -90,8 +90,8 @@ Open `File > Settings...` for parser behavior and `View > Layout and visibility.
 ### Quest Generation
 
 - `Lua generation`: choose `Legacy spawn stub` for the existing generated quest Lua and spawn-starter workflow.
-- Choose `Quest module Lua` to generate quest scripts that call `SpawnScripts/Generic/QuestModule.lua`.
-- Before using generated module Lua in content, make sure `SpawnScripts/Generic/QuestModule.lua` exists under the selected content root.
+- Choose `Quest module Lua` to generate quest scripts that call `Quests/Generic/QuestModule.lua`.
+- Before using generated module Lua in content, make sure `Quests/Generic/QuestModule.lua` exists under the selected content root. The settings window shows whether the file is missing, current, or outdated and can copy/update it from the QuestParser bundled module.
 
 ### Database Resolution
 

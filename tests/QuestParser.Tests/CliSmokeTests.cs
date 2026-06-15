@@ -51,7 +51,7 @@ public sealed class CliSmokeTests
             Assert.True(File.Exists(Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.missing.md")));
             Assert.True(File.Exists(Path.Combine(tempRoot, "SpawnScripts", "Commonlands", "JPFeterman.example.lua")));
             var defaultLua = await File.ReadAllTextAsync(Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.lua"));
-            Assert.DoesNotContain("SpawnScripts/Generic/QuestModule", defaultLua);
+            Assert.DoesNotContain("Quests/Generic/QuestModule", defaultLua);
             Assert.DoesNotContain("QuestModule.AddSteps", defaultLua);
             await AssertSpecGenerationModeAsync(
                 Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.quest.json"),
@@ -83,8 +83,9 @@ public sealed class CliSmokeTests
 
             Assert.Equal(0, exitCode);
             var lua = await File.ReadAllTextAsync(Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.lua"));
-            Assert.Contains("require \"SpawnScripts/Generic/QuestModule\"", lua);
+            Assert.Contains("require \"Quests/Generic/QuestModule\"", lua);
             Assert.DoesNotContain("local QuestModule = require", lua);
+            Assert.Contains("QuestModule.ExportStageStepHandlers", lua);
             Assert.Contains("QuestModule.AddSteps(Quest, STAGE_1_STEPS)", lua);
             await AssertSpecGenerationModeAsync(
                 Path.Combine(tempRoot, "Quests", "Commonlands", "a_hunters_tool.quest.json"),
@@ -120,7 +121,7 @@ public sealed class CliSmokeTests
             Assert.Equal(0, exitCode);
             var text = output.ToString();
             Assert.Contains("MODULE_LUA_MISSING_QUEST_MODULE", text);
-            Assert.Contains("SpawnScripts/Generic/QuestModule.lua", text);
+            Assert.Contains("Quests/Generic/QuestModule.lua", text);
         }
         finally
         {
@@ -216,7 +217,7 @@ public sealed class CliSmokeTests
             Assert.Equal(0, exitCode);
             var text = output.ToString();
             Assert.Contains("MODULE_LUA_MISSING_QUEST_MODULE", text);
-            Assert.Contains("SpawnScripts/Generic/QuestModule.lua", text);
+            Assert.Contains("Quests/Generic/QuestModule.lua", text);
         }
         finally
         {

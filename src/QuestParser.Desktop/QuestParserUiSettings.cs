@@ -47,7 +47,7 @@ public sealed record QuestParserUiSettings
     public string DbPassword { get; init; } = Defaults.DbPassword ?? "";
 
     public bool ShowQuestSourcePanel { get; init; } = true;
-    public bool ShowSettingsSummary { get; init; } = true;
+    public bool ShowSettingsSummary { get; init; } = false;
     public bool ShowVerificationSteps { get; init; } = true;
     public bool ShowSourceDataPanel { get; init; } = true;
     public bool ShowCandidatePanel { get; init; } = true;

@@ -74,9 +74,14 @@
                 </GroupBox>
 
                 <GroupBox Header="Quest Generation" Padding="12">
-                    <Grid ColumnDefinitions="170,*" RowDefinitions="Auto" ColumnSpacing="12" RowSpacing="10">
+                    <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="10">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Lua generation" VerticalAlignment="Center" />
                         <ComboBox Grid.Row="0" Grid.Column="1" Name="GenerationModeBox" Width="220" HorizontalAlignment="Left" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="QuestModule" VerticalAlignment="Center" />
+                        <Grid Grid.Row="1" Grid.Column="1" Name="QuestModulePanel" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Grid.Column="0" Name="QuestModuleStatusText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#334155" />
+                            <Button Grid.Column="1" Name="CopyQuestModuleButton" Content="Copy" MinWidth="84" />
+                        </Grid>
                     </Grid>
                 </GroupBox>
 

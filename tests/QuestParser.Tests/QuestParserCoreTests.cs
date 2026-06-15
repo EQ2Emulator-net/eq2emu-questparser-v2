@@ -281,13 +281,28 @@ public sealed class QuestParserCoreTests
 
         var lua = new ModuleLuaGenerator().Generate(spec);
 
-        Assert.Contains("require \"SpawnScripts/Generic/QuestModule\"", lua);
+        Assert.Contains("require \"Quests/Generic/QuestModule\"", lua);
         Assert.DoesNotContain("local QuestModule = require", lua);
         Assert.Contains("local STAGE_1_STEPS = {", lua);
-        Assert.Contains("QuestModule.ExportStepHandlers(STAGE_1_STEPS, { overwrite = true })", lua);
+        Assert.Contains("local ALL_STEPS = QuestModule.ExportStageStepHandlers({", lua);
+        Assert.Contains("\tSTAGE_1_STEPS,", lua);
+        Assert.Contains("}, { overwrite = true })", lua);
+        Assert.DoesNotContain("QuestModule.ExportStepHandlers(STAGE_", lua);
+        Assert.DoesNotContain("for _, step in ipairs(STAGE_", lua);
         Assert.Contains("QuestModule.AddSteps(Quest, STAGE_1_STEPS)", lua);
-        Assert.Contains("local ALL_STEPS = {}", lua);
         Assert.Equal(1, CountOccurrences(lua, "QuestModule.ReloadByStep"));
+    }
+
+    [Fact]
+    public void ModuleLuaGeneratorUsesQuestModuleAllCompleteForParallelProgress()
+    {
+        var spec = BuildResolvedSpec();
+        spec.GenerationMode = QuestGenerationMode.ModuleLua;
+
+        var lua = new ModuleLuaGenerator().Generate(spec);
+
+        Assert.Contains("\tif QuestModule.AllComplete(Player, AHuntersTool, STAGE_1_STEPS) then", lua);
+        Assert.DoesNotContain("QuestStepIsComplete(Player, AHuntersTool, 1) and", lua);
     }
 
     [Fact]
@@ -298,7 +313,7 @@ public sealed class QuestParserCoreTests
 
         var lua = new LuaGenerator().Generate(spec);
 
-        Assert.DoesNotContain("SpawnScripts/Generic/QuestModule", lua);
+        Assert.DoesNotContain("Quests/Generic/QuestModule", lua);
         Assert.Contains("function AddStage1Steps(Quest)", lua);
         Assert.Contains("function Step1Complete(Quest, QuestGiver, Player)", lua);
         Assert.Contains("function Reload(Quest, QuestGiver, Player, Step)", lua);
@@ -444,12 +459,12 @@ public sealed class QuestParserCoreTests
             return;
 
         var tempRoot = Path.Combine(Path.GetTempPath(), "eq2-questparser-lua-smoke-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(tempRoot, "SpawnScripts", "Generic"));
+        Directory.CreateDirectory(Path.Combine(tempRoot, "Quests", "Generic"));
         try
         {
             var generatedPath = Path.Combine(tempRoot, "generated.lua");
             var smokePath = Path.Combine(tempRoot, "smoke.lua");
-            var modulePath = Path.Combine(tempRoot, "SpawnScripts", "Generic", "QuestModule.lua");
+            var modulePath = Path.Combine(tempRoot, "Quests", "Generic", "QuestModule.lua");
             await File.WriteAllTextAsync(modulePath, QuestModuleSmokeStubLua());
             await File.WriteAllTextAsync(generatedPath, new ModuleLuaGenerator().Generate(BuildModuleLuaSmokeSpec()));
             await File.WriteAllTextAsync(smokePath, """
@@ -499,7 +514,7 @@ public sealed class QuestParserCoreTests
             diagnostics,
             QuestDiagnosticSeverity.Warning,
             "MODULE_LUA_MISSING_QUEST_MODULE",
-            "QuestModule.lua");
+            "Quests/Generic/QuestModule.lua");
     }
 
     [Fact]
@@ -1211,6 +1226,17 @@ public sealed class QuestParserCoreTests
                     end
                 end
             end
+        end
+
+        function QuestModule.ExportStageStepHandlers(stages, options)
+            local allSteps = {}
+            for _, steps in ipairs(stages or {}) do
+                for _, step in ipairs(steps) do
+                    allSteps[#allSteps + 1] = step
+                end
+            end
+            QuestModule.ExportStepHandlers(allSteps, options)
+            return allSteps
         end
 
         function QuestModule.AddSteps(Quest, steps)

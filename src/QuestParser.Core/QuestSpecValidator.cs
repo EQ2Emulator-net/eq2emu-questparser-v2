@@ -122,15 +122,24 @@ public static class QuestSpecValidator
 
     private static void ValidateModuleLua(List<QuestDiagnostic> diagnostics, QuestSpec spec)
     {
-        var modulePath = Path.Combine(spec.Output.ContentRoot, "SpawnScripts", "Generic", "QuestModule.lua");
-        if (!File.Exists(modulePath))
+        var moduleStatus = QuestModuleDeployment.GetStatus(spec.Output.ContentRoot);
+        if (moduleStatus.State == QuestModuleDeploymentState.Missing)
         {
             Add(
                 diagnostics,
                 QuestDiagnosticSeverity.Warning,
                 "output",
                 "MODULE_LUA_MISSING_QUEST_MODULE",
-                "Deploy/copy SpawnScripts/Generic/QuestModule.lua to the content root before using generated module-lua scripts.");
+                $"Deploy/copy {QuestModuleDeployment.TargetRelativePath} to the content root before using generated module-lua scripts.");
+        }
+        else if (moduleStatus.State == QuestModuleDeploymentState.Outdated)
+        {
+            Add(
+                diagnostics,
+                QuestDiagnosticSeverity.Warning,
+                "output",
+                "MODULE_LUA_OUTDATED_QUEST_MODULE",
+                $"{QuestModuleDeployment.TargetRelativePath} differs from the QuestParser bundled QuestModule.lua; update it before using generated module-lua scripts.");
         }
 
         var stageNumbers = spec.Stages

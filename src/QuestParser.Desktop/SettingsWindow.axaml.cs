@@ -15,6 +15,7 @@ public partial class SettingsWindow : Window
     ];
 
     private bool _testingDatabase;
+    private bool _copyingQuestModule;
 
     public SettingsWindow()
         : this(QuestParserUiSettings.Load())
@@ -29,13 +30,24 @@ public partial class SettingsWindow : Window
         GenerationModeBox.ItemsSource = GenerationModes;
         ApplySettingsToControls(settings.Normalize());
 
-        BrowseContentRootButton.Click += async (_, _) => await BrowseFolderIntoAsync(ContentRootBox, "Choose EQ2Emu content root");
+        BrowseContentRootButton.Click += async (_, _) =>
+        {
+            await BrowseFolderIntoAsync(ContentRootBox, "Choose EQ2Emu content root");
+            UpdateQuestModuleStatus();
+        };
         BrowseCensusCacheButton.Click += async (_, _) => await BrowseFolderIntoAsync(CensusCacheDirectoryBox, "Choose Census cache folder");
         BrowseLocalCensusButton.Click += async (_, _) => await BrowseFolderIntoAsync(CensusLocalDirectoryBox, "Choose downloaded Census JSON folder");
         CensusSourceBox.SelectionChanged += (_, _) => UpdateSourceVisibility();
+        ContentRootBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBox.TextProperty)
+                UpdateQuestModuleStatus();
+        };
+        GenerationModeBox.SelectionChanged += (_, _) => UpdateQuestModuleStatus();
         UseDatabaseConnectionBox.PropertyChanged += (_, _) => UpdateDatabaseVisibility();
         UseDbConnectionStringBox.PropertyChanged += (_, _) => UpdateDatabaseVisibility();
         TestDbConnectionButton.Click += async (_, _) => await TestDatabaseConnectionAsync();
+        CopyQuestModuleButton.Click += (_, _) => CopyQuestModule();
         SidebarWidthSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         SourcePanelHeightSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
         DetailsPanelHeightSlider.PropertyChanged += (_, _) => UpdateSliderLabels();
@@ -49,6 +61,7 @@ public partial class SettingsWindow : Window
 
         UpdateSourceVisibility();
         UpdateDatabaseVisibility();
+        UpdateQuestModuleStatus();
         UpdateSliderLabels();
     }
 
@@ -198,6 +211,100 @@ public partial class SettingsWindow : Window
         TestDbConnectionButton.IsEnabled = enabled && !_testingDatabase;
     }
 
+    private void UpdateQuestModuleStatus()
+    {
+        if (CurrentGenerationMode() != QuestGenerationMode.ModuleLua)
+        {
+            SetQuestModuleStatus(
+                "Available when Quest module Lua is selected.",
+                "#64748B",
+                buttonText: "Copy",
+                buttonEnabled: false);
+            return;
+        }
+
+        try
+        {
+            var contentRoot = Clean(ContentRootBox.Text, Defaults.ContentRoot);
+            var status = QuestModuleDeployment.GetStatus(contentRoot);
+            switch (status.State)
+            {
+                case QuestModuleDeploymentState.Current:
+                    SetQuestModuleStatus(
+                        $"Current at {QuestModuleDeployment.TargetRelativePath}.",
+                        "#166534",
+                        buttonText: "Current",
+                        buttonEnabled: false);
+                    break;
+                case QuestModuleDeploymentState.Outdated:
+                    SetQuestModuleStatus(
+                        $"Outdated at {QuestModuleDeployment.TargetRelativePath}. Expected {status.ExpectedHash[..12]}, found {status.ActualHash?[..12]}.",
+                        "#9A3412",
+                        buttonText: "Update",
+                        buttonEnabled: !_copyingQuestModule);
+                    break;
+                default:
+                    SetQuestModuleStatus(
+                        $"Missing at {QuestModuleDeployment.TargetRelativePath}.",
+                        "#991B1B",
+                        buttonText: "Copy",
+                        buttonEnabled: !_copyingQuestModule);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            SetQuestModuleStatus(
+                "QuestModule status unavailable: " + ex.Message,
+                "#991B1B",
+                buttonText: "Copy",
+                buttonEnabled: false);
+        }
+    }
+
+    private void CopyQuestModule()
+    {
+        if (_copyingQuestModule)
+            return;
+
+        _copyingQuestModule = true;
+        UpdateQuestModuleStatus();
+        try
+        {
+            var contentRoot = Clean(ContentRootBox.Text, Defaults.ContentRoot);
+            var status = QuestModuleDeployment.GetStatus(contentRoot);
+            if (status.State == QuestModuleDeploymentState.Current)
+                return;
+
+            QuestModuleDeployment.CopyToContentRoot(
+                contentRoot,
+                overwrite: status.State == QuestModuleDeploymentState.Outdated);
+        }
+        catch (Exception ex)
+        {
+            SetQuestModuleStatus(
+                "QuestModule copy failed: " + ex.Message,
+                "#991B1B",
+                buttonText: "Copy",
+                buttonEnabled: true);
+            return;
+        }
+        finally
+        {
+            _copyingQuestModule = false;
+        }
+
+        UpdateQuestModuleStatus();
+    }
+
+    private void SetQuestModuleStatus(string text, string color, string buttonText, bool buttonEnabled)
+    {
+        QuestModuleStatusText.Text = text;
+        QuestModuleStatusText.Foreground = Brush.Parse(color);
+        CopyQuestModuleButton.Content = buttonText;
+        CopyQuestModuleButton.IsEnabled = buttonEnabled;
+    }
+
     private CensusSourceKind CurrentSource()
     {
         return CensusSourceBox.SelectedItem is CensusSourceKind kind ? kind : CensusSourceKind.Daybreak;
@@ -240,7 +347,7 @@ public partial class SettingsWindow : Window
     private void ResetLayout()
     {
         ShowQuestSourceBox.IsChecked = true;
-        ShowSettingsSummaryBox.IsChecked = true;
+        ShowSettingsSummaryBox.IsChecked = false;
         ShowVerificationStepsBox.IsChecked = true;
         ShowSourceDataPanelBox.IsChecked = true;
         ShowCandidatePanelBox.IsChecked = true;

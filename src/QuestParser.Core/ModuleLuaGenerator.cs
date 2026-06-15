@@ -27,7 +27,7 @@ public sealed class ModuleLuaGenerator
         writer.AppendLine("\tFollowed by\t\t:\tNone");
         writer.AppendLine("--]]");
         writer.AppendLine();
-        writer.AppendLine("require \"SpawnScripts/Generic/QuestModule\"");
+        writer.AppendLine($"require \"{QuestModuleDeployment.RequirePath}\"");
         writer.AppendLine();
         writer.AppendLine($"local {questIdentifier} = {questId}");
         writer.AppendLine();
@@ -78,7 +78,6 @@ public sealed class ModuleLuaGenerator
     {
         foreach (var stage in spec.Stages)
             writer.AppendLine($"local STAGE_{stage.Number}_STEPS = {{}}");
-        writer.AppendLine("local ALL_STEPS = {}");
         writer.AppendLine();
 
         foreach (var stage in spec.Stages)
@@ -116,8 +115,7 @@ public sealed class ModuleLuaGenerator
     private static void WriteCheckProgress(StringBuilder writer, QuestStageSpec stage, string questIdentifier)
     {
         writer.AppendLine($"CheckProgressStage{stage.Number} = function(Quest, QuestGiver, Player)");
-        var conditions = stage.Steps.Select(step => $"QuestStepIsComplete(Player, {questIdentifier}, {step.Number})").ToArray();
-        writer.AppendLine("\tif " + (conditions.Length == 0 ? "true" : string.Join(" and ", conditions)) + " then");
+        writer.AppendLine($"\tif QuestModule.AllComplete(Player, {questIdentifier}, STAGE_{stage.Number}_STEPS) then");
         writer.AppendLine($"\t\tCompleteStage{stage.Number}(Quest, QuestGiver, Player)");
         writer.AppendLine("\tend");
         writer.AppendLine("end");
@@ -206,14 +204,11 @@ public sealed class ModuleLuaGenerator
 
     private static void WriteAllSteps(StringBuilder writer, QuestSpec spec)
     {
+        writer.AppendLine("local ALL_STEPS = QuestModule.ExportStageStepHandlers({");
         foreach (var stage in spec.Stages)
-        {
-            writer.AppendLine($"QuestModule.ExportStepHandlers(STAGE_{stage.Number}_STEPS, {{ overwrite = true }})");
-            writer.AppendLine($"for _, step in ipairs(STAGE_{stage.Number}_STEPS) do");
-            writer.AppendLine("\tALL_STEPS[#ALL_STEPS + 1] = step");
-            writer.AppendLine("end");
-            writer.AppendLine();
-        }
+            writer.AppendLine($"\tSTAGE_{stage.Number}_STEPS,");
+        writer.AppendLine("}, { overwrite = true })");
+        writer.AppendLine();
     }
 
     private static void WriteInit(StringBuilder writer, QuestSpec spec)

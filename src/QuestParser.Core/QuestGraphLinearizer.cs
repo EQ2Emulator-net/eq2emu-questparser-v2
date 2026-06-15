@@ -83,6 +83,14 @@ public sealed class QuestGraphLinearizer
         NormalizeNumbers(spec);
     }
 
+    public void RemoveStage(QuestSpec spec, int stageIndex)
+    {
+        ValidateStageIndex(spec, stageIndex, nameof(stageIndex));
+
+        spec.Stages.RemoveAt(stageIndex);
+        NormalizeNumbers(spec);
+    }
+
     public void SetStageParallel(QuestSpec spec, int stageIndex, bool isParallel)
     {
         ValidateStageIndex(spec, stageIndex, nameof(stageIndex));

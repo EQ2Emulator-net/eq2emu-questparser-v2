@@ -19,6 +19,19 @@ public sealed class QuestGraphLinearizerTests
     }
 
     [Fact]
+    public void RemoveStageRenumbersRemainingStagesAndSteps()
+    {
+        var spec = BuildSpec();
+
+        new QuestGraphLinearizer().RemoveStage(spec, stageIndex: 0);
+
+        var stage = Assert.Single(spec.Stages);
+        Assert.Equal("Second", stage.Description);
+        Assert.Equal(1, stage.Number);
+        Assert.Equal(1, Assert.Single(stage.Steps).Number);
+    }
+
+    [Fact]
     public void MoveStepBetweenStagesRenumbersSteps()
     {
         var spec = BuildSpec();
@@ -192,6 +205,19 @@ public sealed class QuestGraphLinearizerTests
             () => new QuestGraphLinearizer().RemoveStep(spec, stageIndex: 0, stepIndex));
 
         Assert.Equal("stepIndex", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(2)]
+    public void RemoveStageThrowsClearRangeErrorForInvalidStageIndex(int stageIndex)
+    {
+        var spec = BuildSpec();
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new QuestGraphLinearizer().RemoveStage(spec, stageIndex));
+
+        Assert.Equal("stageIndex", exception.ParamName);
     }
 
     [Theory]

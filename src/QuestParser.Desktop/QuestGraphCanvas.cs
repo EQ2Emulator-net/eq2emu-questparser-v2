@@ -32,14 +32,19 @@ internal sealed class QuestGraphCanvas : Control
     private static readonly Pen EdgePen = new(EdgeBrush, 1.4);
     private static readonly Pen NodeBorderPen = new(new SolidColorBrush(Color.FromRgb(203, 213, 225)), 1);
     private static readonly Pen SelectedPen = new(new SolidColorBrush(Color.FromRgb(37, 99, 235)), 2.2);
+    private static readonly Pen ConnectionSourcePen = new(new SolidColorBrush(Color.FromRgb(22, 163, 74)), 2.4);
     private static readonly Typeface TitleTypeface = new(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold);
     private static readonly Typeface BodyTypeface = new(FontFamily.Default);
 
     private QuestGraph _graph = new();
     private string _selectedNodeId = "";
+    private string _connectionSourceNodeId = "";
+    private double _zoom = 1;
+    private Vector _graphOffset;
     private QuestGraphNode? _draggedNode;
     private IPointer? _capturedPointer;
     private Vector _dragOffset;
+    private bool _nodeMoveStarted;
 
     public QuestGraphCanvas()
     {
@@ -67,7 +72,45 @@ internal sealed class QuestGraphCanvas : Control
         }
     }
 
+    public string ConnectionSourceNodeId
+    {
+        get => _connectionSourceNodeId;
+        set
+        {
+            _connectionSourceNodeId = value ?? "";
+            InvalidateVisual();
+        }
+    }
+
+    public double Zoom
+    {
+        get => _zoom;
+        set
+        {
+            var zoom = Math.Clamp(value, 0.35, 2.5);
+            if (Math.Abs(_zoom - zoom) < 0.001)
+                return;
+
+            _zoom = zoom;
+            InvalidateVisual();
+        }
+    }
+
+    public Vector GraphOffset
+    {
+        get => _graphOffset;
+        set
+        {
+            if (_graphOffset == value)
+                return;
+
+            _graphOffset = value;
+            InvalidateVisual();
+        }
+    }
+
     public event Action<string>? NodeSelected;
+    public event Action<string>? NodeMoveStarted;
     public event Action<string, double, double>? NodeMoved;
 
     public override void Render(DrawingContext context)
@@ -77,9 +120,17 @@ internal sealed class QuestGraphCanvas : Control
         var bounds = new Rect(Bounds.Size);
         context.DrawRectangle(BackgroundBrush, null, bounds);
 
-        DrawGrid(context, bounds);
-        DrawEdges(context);
-        DrawNodes(context);
+        using (context.PushTransform(Matrix.CreateTranslation(GraphOffset.X, GraphOffset.Y) * Matrix.CreateScale(Zoom, Zoom)))
+        {
+            var graphBounds = new Rect(
+                -GraphOffset.X,
+                -GraphOffset.Y,
+                bounds.Width / Zoom,
+                bounds.Height / Zoom);
+            DrawGrid(context, graphBounds);
+            DrawEdges(context);
+            DrawNodes(context);
+        }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -90,14 +141,16 @@ internal sealed class QuestGraphCanvas : Control
         if (!pointerPoint.Properties.IsLeftButtonPressed)
             return;
 
-        var node = HitTestNode(pointerPoint.Position);
+        var graphPosition = ToGraphPoint(pointerPoint.Position);
+        var node = HitTestNode(graphPosition);
         if (node is null)
             return;
 
         var nodeRect = GetNodeRect(node);
         _draggedNode = node;
         _capturedPointer = e.Pointer;
-        _dragOffset = pointerPoint.Position - nodeRect.Position;
+        _dragOffset = graphPosition - nodeRect.Position;
+        _nodeMoveStarted = false;
 
         var nodeId = CleanText(node.Id);
         SelectedNodeId = nodeId;
@@ -120,7 +173,13 @@ internal sealed class QuestGraphCanvas : Control
             return;
         }
 
-        var position = pointerPoint.Position - _dragOffset;
+        if (!_nodeMoveStarted)
+        {
+            _nodeMoveStarted = true;
+            NodeMoveStarted?.Invoke(CleanText(_draggedNode.Id));
+        }
+
+        var position = ToGraphPoint(pointerPoint.Position) - _dragOffset;
         var layout = GetLayout(_draggedNode);
         layout.X = position.X;
         layout.Y = position.Y;
@@ -146,15 +205,19 @@ internal sealed class QuestGraphCanvas : Control
         base.OnPointerCaptureLost(e);
         _draggedNode = null;
         _capturedPointer = null;
+        _nodeMoveStarted = false;
     }
 
     private void DrawGrid(DrawingContext context, Rect bounds)
     {
-        for (var x = 0.5; x <= bounds.Width; x += GridSpacing)
-            context.DrawLine(GridPen, new Point(x, 0), new Point(x, bounds.Height));
+        var startX = Math.Floor(bounds.X / GridSpacing) * GridSpacing + 0.5;
+        var startY = Math.Floor(bounds.Y / GridSpacing) * GridSpacing + 0.5;
 
-        for (var y = 0.5; y <= bounds.Height; y += GridSpacing)
-            context.DrawLine(GridPen, new Point(0, y), new Point(bounds.Width, y));
+        for (var x = startX; x <= bounds.Right; x += GridSpacing)
+            context.DrawLine(GridPen, new Point(x, bounds.Y), new Point(x, bounds.Bottom));
+
+        for (var y = startY; y <= bounds.Bottom; y += GridSpacing)
+            context.DrawLine(GridPen, new Point(bounds.X, y), new Point(bounds.Right, y));
     }
 
     private void DrawEdges(DrawingContext context)
@@ -207,6 +270,12 @@ internal sealed class QuestGraphCanvas : Control
         {
             var selectedRect = rect.Inflate(2);
             context.DrawRectangle(null, SelectedPen, selectedRect, CornerRadius + 2, CornerRadius + 2);
+        }
+
+        if (string.Equals(node.Id, ConnectionSourceNodeId, StringComparison.Ordinal))
+        {
+            var sourceRect = rect.Inflate(5);
+            context.DrawRectangle(null, ConnectionSourcePen, sourceRect, CornerRadius + 4, CornerRadius + 4);
         }
 
         using (context.PushClip(rect))
@@ -355,6 +424,12 @@ internal sealed class QuestGraphCanvas : Control
         _capturedPointer?.Capture(null);
         _draggedNode = null;
         _capturedPointer = null;
+        _nodeMoveStarted = false;
+    }
+
+    private Point ToGraphPoint(Point position)
+    {
+        return new Point(position.X / Zoom - GraphOffset.X, position.Y / Zoom - GraphOffset.Y);
     }
 
     private static Rect GetNodeRect(QuestGraphNode node)

@@ -1,16 +1,31 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia;
 using System.Globalization;
+using System.Text.Json;
 using QuestParser.Core;
 
 namespace QuestParser.Desktop;
 
 public partial class VisualEditorWindow : Window
 {
+    private const double MinimumCanvasWidth = 1800;
+    private const double MinimumCanvasHeight = 1400;
+    private const double CanvasMargin = 240;
+    private const double MinimumZoom = 0.35;
+    private const double MaximumZoom = 2.5;
+    private const double ZoomStep = 1.2;
+
     private readonly VisualEditorViewModel _viewModel;
     private readonly bool _ownsSpec;
+    private readonly Stack<string> _undoStack = new();
+    private readonly Stack<string> _redoStack = new();
+    private double _zoom = 1;
     private bool _busy;
+    private bool _connectMode;
+    private string? _connectionSourceNodeId;
 
     public VisualEditorWindow()
         : this(new QuestWorkflow(), null, ownsSpec: true)
@@ -48,19 +63,22 @@ public partial class VisualEditorWindow : Window
 
     private void WireEvents()
     {
-        GraphCanvas.NodeSelected += nodeId =>
-        {
-            _viewModel.SelectNode(nodeId);
-            RefreshInspector();
-            RefreshCanvas();
-        };
+        GraphCanvas.NodeSelected += HandleGraphNodeSelected;
 
+        GraphCanvas.NodeMoveStarted += _ => PushUndoSnapshot();
         GraphCanvas.NodeMoved += (nodeId, x, y) =>
         {
             _viewModel.MoveNode(nodeId, x, y);
             RefreshCanvas();
         };
 
+        UndoButton.Click += (_, _) => Undo();
+        RedoButton.Click += (_, _) => Redo();
+        DeleteButton.Click += (_, _) => DeleteSelectedNode();
+        ConnectButton.Click += (_, _) => ToggleConnectMode();
+        ZoomInButton.Click += (_, _) => SetZoom(_zoom * ZoomStep);
+        ZoomOutButton.Click += (_, _) => SetZoom(_zoom / ZoomStep);
+        CenterButton.Click += (_, _) => CenterGraph();
         ValidateButton.Click += (_, _) => RefreshDiagnostics();
         OpenButton.Click += async (_, _) => await OpenSpecAsync();
         GenerateButton.Click += async (_, _) => await GenerateAsync();
@@ -69,6 +87,102 @@ public partial class VisualEditorWindow : Window
         FlowPaletteList.DoubleTapped += (_, _) => AddSelectedFlow();
         FormButton.Click += (_, _) => RefreshInspector();
         DefinitionButton.Click += (_, _) => ShowDefinition();
+        KeyDown += (_, e) => HandleWindowKeyDown(e);
+    }
+
+    private void HandleGraphNodeSelected(string nodeId)
+    {
+        if (_connectMode)
+        {
+            HandleConnectNodeSelected(nodeId);
+            return;
+        }
+
+        _viewModel.SelectNode(nodeId);
+        RefreshInspector();
+        RefreshCanvas();
+        RefreshEnabledState();
+    }
+
+    private void HandleConnectNodeSelected(string nodeId)
+    {
+        if (_connectionSourceNodeId is null)
+        {
+            _viewModel.SelectNode(nodeId);
+            _connectionSourceNodeId = nodeId;
+            _viewModel.GenerationLog.Add($"Connect source selected: {nodeId}. Select a target node.");
+            RefreshInspector();
+            RefreshCanvas();
+            RefreshBottomPanels();
+            RefreshEnabledState();
+            return;
+        }
+
+        var sourceNodeId = _connectionSourceNodeId;
+        ClearConnectMode();
+        ApplyStructuralEdit(() => _viewModel.ConnectNodes(sourceNodeId, nodeId));
+    }
+
+    private void ToggleConnectMode()
+    {
+        if (_connectMode)
+        {
+            ClearConnectMode();
+            return;
+        }
+
+        if (_viewModel.Spec is null)
+        {
+            RefreshEnabledState();
+            return;
+        }
+
+        _connectMode = true;
+        _connectionSourceNodeId = null;
+        _viewModel.GenerationLog.Add("Connect mode: select a source node, then a target node.");
+        RefreshCanvas();
+        RefreshBottomPanels();
+        RefreshEnabledState();
+    }
+
+    private void ClearConnectMode()
+    {
+        _connectMode = false;
+        _connectionSourceNodeId = null;
+        RefreshCanvas();
+        RefreshEnabledState();
+    }
+
+    private void DeleteSelectedNode()
+    {
+        var selectedNodeId = _viewModel.SelectedNode?.Id;
+        if (string.IsNullOrWhiteSpace(selectedNodeId))
+        {
+            RefreshEnabledState();
+            return;
+        }
+
+        ClearConnectMode();
+        ApplyStructuralEdit(() => _viewModel.DeleteNode(selectedNodeId));
+    }
+
+    private void HandleWindowKeyDown(KeyEventArgs e)
+    {
+        if (e.Source is TextBox or ComboBox)
+            return;
+
+        if (e.Key is Key.Delete or Key.Back)
+        {
+            DeleteSelectedNode();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape && _connectMode)
+        {
+            ClearConnectMode();
+            e.Handled = true;
+        }
     }
 
     private async Task OpenSpecAsync()
@@ -120,6 +234,7 @@ public partial class VisualEditorWindow : Window
 
             var spec = await QuestWorkflow.ReadSpecAsync(path);
             _viewModel.LoadSpec(spec);
+            ClearUndoHistory();
             _viewModel.GenerationLog.Add($"Loaded {path}");
             RefreshAll();
         }
@@ -235,8 +350,7 @@ public partial class VisualEditorWindow : Window
             return;
 
         var stageIndex = _viewModel.SelectedNode?.StageIndex ?? 0;
-        _viewModel.AddStep(stageIndex, stepType);
-        RefreshAll();
+        ApplyStructuralEdit(() => _viewModel.AddStep(stageIndex, stepType));
     }
 
     private void AddSelectedFlow()
@@ -253,12 +367,10 @@ public partial class VisualEditorWindow : Window
         switch (item.Label)
         {
             case "Stage":
-                _viewModel.AddStage(isParallel: false);
-                RefreshAll();
+                ApplyStructuralEdit(() => _viewModel.AddStage(isParallel: false));
                 break;
             case "Parallel Stage":
-                _viewModel.AddStage(isParallel: true);
-                RefreshAll();
+                ApplyStructuralEdit(() => _viewModel.AddStage(isParallel: true));
                 break;
             default:
                 _viewModel.GenerationLog.Add($"Flow item '{item.Label}' is not wired yet.");
@@ -280,8 +392,11 @@ public partial class VisualEditorWindow : Window
 
     private void RefreshCanvas()
     {
+        GraphCanvas.Zoom = _zoom;
         GraphCanvas.Graph = _viewModel.Graph;
         GraphCanvas.SelectedNodeId = _viewModel.SelectedNode?.Id ?? "";
+        GraphCanvas.ConnectionSourceNodeId = _connectionSourceNodeId ?? "";
+        UpdateGraphCanvasExtent();
     }
 
     private void RefreshDiagnostics()
@@ -299,6 +414,14 @@ public partial class VisualEditorWindow : Window
     {
         var hasSpec = _viewModel.Spec is not null;
         var isIdle = !_busy;
+        UndoButton.IsEnabled = isIdle && _undoStack.Count > 0;
+        RedoButton.IsEnabled = isIdle && _redoStack.Count > 0;
+        DeleteButton.IsEnabled = isIdle && CanDeleteNode(_viewModel.SelectedNode);
+        ConnectButton.IsEnabled = hasSpec && isIdle;
+        ConnectButton.Content = _connectMode ? "Cancel edit" : "Edit connections";
+        ZoomInButton.IsEnabled = isIdle && _zoom < MaximumZoom;
+        ZoomOutButton.IsEnabled = isIdle && _zoom > MinimumZoom;
+        CenterButton.IsEnabled = isIdle && hasSpec;
         ValidateButton.IsEnabled = isIdle;
         OpenButton.IsEnabled = isIdle;
         GenerateButton.IsEnabled = hasSpec && isIdle && _ownsSpec;
@@ -307,6 +430,184 @@ public partial class VisualEditorWindow : Window
         DefinitionButton.IsEnabled = isIdle;
         ActionPaletteList.IsEnabled = hasSpec && isIdle;
         FlowPaletteList.IsEnabled = hasSpec && isIdle;
+    }
+
+    private void PushUndoSnapshot()
+    {
+        var snapshot = CaptureSnapshot();
+        if (snapshot is null)
+            return;
+
+        if (_undoStack.Count == 0 || !string.Equals(_undoStack.Peek(), snapshot, StringComparison.Ordinal))
+            _undoStack.Push(snapshot);
+        _redoStack.Clear();
+        RefreshEnabledState();
+    }
+
+    private void ClearUndoHistory()
+    {
+        _undoStack.Clear();
+        _redoStack.Clear();
+        RefreshEnabledState();
+    }
+
+    private void Undo()
+    {
+        if (_undoStack.Count == 0)
+            return;
+
+        var current = CaptureSnapshot();
+        var previous = _undoStack.Pop();
+        if (current is not null)
+            _redoStack.Push(current);
+
+        RestoreSnapshot(previous);
+    }
+
+    private void Redo()
+    {
+        if (_redoStack.Count == 0)
+            return;
+
+        var current = CaptureSnapshot();
+        var next = _redoStack.Pop();
+        if (current is not null)
+            _undoStack.Push(current);
+
+        RestoreSnapshot(next);
+    }
+
+    private string? CaptureSnapshot()
+    {
+        return _viewModel.Spec is null
+            ? null
+            : JsonSerializer.Serialize(_viewModel.Spec, QuestSpecJsonContext.Default.QuestSpec);
+    }
+
+    private void RestoreSnapshot(string snapshot)
+    {
+        var selectedNodeId = _viewModel.SelectedNode?.Id;
+        var spec = JsonSerializer.Deserialize(snapshot, QuestSpecJsonContext.Default.QuestSpec);
+        if (spec is null)
+            return;
+
+        _viewModel.LoadSpec(spec);
+        if (!string.IsNullOrWhiteSpace(selectedNodeId))
+            _viewModel.SelectNode(selectedNodeId);
+        _viewModel.MarkDirty();
+        RefreshAll();
+    }
+
+    private void SetZoom(double zoom)
+    {
+        var nextZoom = Math.Clamp(zoom, MinimumZoom, MaximumZoom);
+        if (Math.Abs(nextZoom - _zoom) < 0.001)
+            return;
+
+        var viewport = GraphScrollViewer.Viewport;
+        var centerX = (GraphScrollViewer.Offset.X + viewport.Width / 2) / _zoom;
+        var centerY = (GraphScrollViewer.Offset.Y + viewport.Height / 2) / _zoom;
+
+        _zoom = nextZoom;
+        RefreshCanvas();
+        GraphScrollViewer.Offset = ClampGraphOffset(new Vector(
+            centerX * _zoom - viewport.Width / 2,
+            centerY * _zoom - viewport.Height / 2));
+        RefreshEnabledState();
+    }
+
+    private void CenterGraph()
+    {
+        var contentBounds = GetGraphContentBounds(_viewModel.Graph);
+        var graphOffset = GraphCanvas.GraphOffset;
+        var viewport = GraphScrollViewer.Viewport;
+        var offset = new Vector(
+            (contentBounds.X + contentBounds.Width / 2 + graphOffset.X) * _zoom - viewport.Width / 2,
+            (contentBounds.Y + contentBounds.Height / 2 + graphOffset.Y) * _zoom - viewport.Height / 2);
+
+        GraphScrollViewer.Offset = ClampGraphOffset(offset);
+    }
+
+    private Vector ClampGraphOffset(Vector offset)
+    {
+        var maxX = Math.Max(0, GraphCanvas.Width - GraphScrollViewer.Viewport.Width);
+        var maxY = Math.Max(0, GraphCanvas.Height - GraphScrollViewer.Viewport.Height);
+        return new Vector(
+            Math.Clamp(offset.X, 0, maxX),
+            Math.Clamp(offset.Y, 0, maxY));
+    }
+
+    private void UpdateGraphCanvasExtent()
+    {
+        var viewport = CalculateGraphCanvasViewport(_viewModel.Graph, _zoom);
+        GraphCanvas.GraphOffset = viewport.GraphOffset;
+        GraphCanvas.Width = viewport.Width;
+        GraphCanvas.Height = viewport.Height;
+    }
+
+    internal static GraphCanvasViewport CalculateGraphCanvasViewport(QuestGraph graph, double zoom)
+    {
+        var contentBounds = GetGraphContentBounds(graph);
+        if (graph.Nodes.Count == 0)
+        {
+            return new GraphCanvasViewport(
+                Math.Ceiling(MinimumCanvasWidth * zoom),
+                Math.Ceiling(MinimumCanvasHeight * zoom),
+                default);
+        }
+
+        var graphOffset = new Vector(
+            contentBounds.X < CanvasMargin ? CanvasMargin - contentBounds.X : 0,
+            contentBounds.Y < CanvasMargin ? CanvasMargin - contentBounds.Y : 0);
+        var logicalWidth = Math.Max(MinimumCanvasWidth, contentBounds.Right + graphOffset.X + CanvasMargin);
+        var logicalHeight = Math.Max(MinimumCanvasHeight, contentBounds.Bottom + graphOffset.Y + CanvasMargin);
+
+        return new GraphCanvasViewport(
+            Math.Ceiling(logicalWidth * zoom),
+            Math.Ceiling(logicalHeight * zoom),
+            graphOffset);
+    }
+
+    private static Rect GetGraphContentBounds(QuestGraph graph)
+    {
+        var nodes = graph.Nodes;
+        if (nodes.Count == 0)
+            return new Rect(0, 0, MinimumCanvasWidth - CanvasMargin, MinimumCanvasHeight - CanvasMargin);
+
+        var hasBounds = false;
+        var minX = 0d;
+        var minY = 0d;
+        var maxX = 0d;
+        var maxY = 0d;
+
+        foreach (var node in nodes)
+        {
+            var bounds = GetNodeBounds(node);
+            if (!hasBounds)
+            {
+                minX = bounds.X;
+                minY = bounds.Y;
+                maxX = bounds.Right;
+                maxY = bounds.Bottom;
+                hasBounds = true;
+                continue;
+            }
+
+            minX = Math.Min(minX, bounds.X);
+            minY = Math.Min(minY, bounds.Y);
+            maxX = Math.Max(maxX, bounds.Right);
+            maxY = Math.Max(maxY, bounds.Bottom);
+        }
+
+        return new Rect(minX, minY, Math.Max(0, maxX - minX), Math.Max(0, maxY - minY));
+    }
+
+    private static Rect GetNodeBounds(QuestGraphNode node)
+    {
+        var layout = node.Layout;
+        var width = layout?.Width > 0 ? layout.Width : 260;
+        var height = layout?.Height > 0 ? layout.Height : 72;
+        return new Rect(layout?.X ?? 0, layout?.Y ?? 0, width, height);
     }
 
     private void RefreshInspector()
@@ -332,6 +633,15 @@ public partial class VisualEditorWindow : Window
             && TryGetSelectedStep(spec, selectedNode, out _, out var step))
         {
             AddNodeHeaderRows(selectedNode);
+            if (selectedNode.StageIndex is int fromStageIndex
+                && selectedNode.StepIndex is int fromStepIndex)
+            {
+                AddStagePickerRow(
+                    "Stage",
+                    spec,
+                    fromStageIndex,
+                    toStageIndex => ApplyStructuralEdit(() => _viewModel.MoveStepToStage(fromStageIndex, fromStepIndex, toStageIndex)));
+            }
             AddEditableMultilineRow("Description", step.Description, value => step.Description = value);
             AddEditableMultilineRow("Completed", step.CompletedDescription, value => step.CompletedDescription = value);
             if (selectedNode.Kind == QuestGraphNodeKind.RandomOptions || step.HasRandomOptions)
@@ -366,7 +676,13 @@ public partial class VisualEditorWindow : Window
             AddNodeHeaderRows(selectedNode);
             AddEditableMultilineRow("Stage text", stage.Description, value => stage.Description = value);
             AddEditableMultilineRow("Completed text", stage.CompletedDescription, value => stage.CompletedDescription = value);
-            AddReadOnlyRow("Parallel", stage.IsParallel ? "Yes" : "No");
+            if (selectedNode.StageIndex is int stageIndex)
+            {
+                AddYesNoRow(
+                    "Parallel",
+                    stage.IsParallel,
+                    isParallel => ApplyStructuralEdit(() => _viewModel.SetStageParallel(stageIndex, isParallel)));
+            }
             return;
         }
 
@@ -419,12 +735,75 @@ public partial class VisualEditorWindow : Window
         {
             Text = value,
             IsReadOnly = true,
+            IsEnabled = false,
             AcceptsReturn = acceptsReturn,
             TextWrapping = acceptsReturn ? TextWrapping.Wrap : TextWrapping.NoWrap,
             MinHeight = acceptsReturn ? 96 : 32
         };
 
         InspectorPanel.Children.Add(textBox);
+    }
+
+    private void AddYesNoRow(string label, bool value, Action<bool> save)
+    {
+        InspectorPanel.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontWeight = FontWeight.SemiBold
+        });
+
+        var currentValue = value;
+        var comboBox = new ComboBox
+        {
+            ItemsSource = new[] { "No", "Yes" },
+            SelectedIndex = value ? 1 : 0,
+            MinHeight = 32
+        };
+
+        comboBox.SelectionChanged += (_, _) =>
+        {
+            if (comboBox.SelectedIndex < 0)
+                return;
+
+            var newValue = comboBox.SelectedIndex == 1;
+            if (newValue == currentValue)
+                return;
+
+            save(newValue);
+            currentValue = newValue;
+        };
+
+        InspectorPanel.Children.Add(comboBox);
+    }
+
+    private void AddStagePickerRow(string label, QuestSpec spec, int currentStageIndex, Action<int> save)
+    {
+        InspectorPanel.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontWeight = FontWeight.SemiBold
+        });
+
+        var choices = spec.Stages
+            .Select((stage, index) => new StageChoice(index, $"Stage {stage.Number}: {TrimForPicker(stage.Description)}"))
+            .ToList();
+        var currentChoice = choices.FirstOrDefault(choice => choice.Index == currentStageIndex);
+        var comboBox = new ComboBox
+        {
+            ItemsSource = choices,
+            SelectedItem = currentChoice,
+            MinHeight = 32
+        };
+
+        comboBox.SelectionChanged += (_, _) =>
+        {
+            if (comboBox.SelectedItem is not StageChoice choice || choice.Index == currentStageIndex)
+                return;
+
+            save(choice.Index);
+        };
+
+        InspectorPanel.Children.Add(comboBox);
     }
 
     private void AddEditableRow(string label, string value, Action<string> save)
@@ -504,13 +883,41 @@ public partial class VisualEditorWindow : Window
 
     private void ApplyInspectorEdit(Action edit)
     {
+        PushUndoSnapshot();
         edit();
+        _viewModel.MarkDirty();
         SyncGraphNodeSummaries();
         _viewModel.RefreshPreview();
         RefreshCanvas();
         BindDiagnostics();
         RefreshBottomPanels();
         RefreshEnabledState();
+    }
+
+    private void ApplyStructuralEdit(Action edit)
+    {
+        PushUndoSnapshot();
+        edit();
+        RefreshAll();
+    }
+
+    private void ApplyStructuralEdit(Func<bool> edit)
+    {
+        var before = CaptureSnapshot();
+        var changed = edit();
+        var after = CaptureSnapshot();
+
+        if (changed
+            && before is not null
+            && after is not null
+            && !string.Equals(before, after, StringComparison.Ordinal))
+        {
+            if (_undoStack.Count == 0 || !string.Equals(_undoStack.Peek(), before, StringComparison.Ordinal))
+                _undoStack.Push(before);
+            _redoStack.Clear();
+        }
+
+        RefreshAll();
     }
 
     private void AddQuestRows(QuestSpec spec, QuestGraphNode? selectedNode)
@@ -629,6 +1036,12 @@ public partial class VisualEditorWindow : Window
         return selectedNode.Kind is QuestGraphNodeKind.Step or QuestGraphNodeKind.RandomOptions;
     }
 
+    private static bool CanDeleteNode(QuestGraphNode? selectedNode)
+    {
+        return selectedNode is not null
+            && (selectedNode.Kind == QuestGraphNodeKind.Stage || IsStepNode(selectedNode));
+    }
+
     private string BuildWorkflowDetails()
     {
         var spec = _viewModel.Spec;
@@ -673,8 +1086,23 @@ public partial class VisualEditorWindow : Window
             : string.Join(Environment.NewLine, details);
     }
 
+    private static string TrimForPicker(string? value)
+    {
+        value = (value ?? "").Trim();
+        if (value.Length == 0)
+            return "Untitled";
+        return value.Length <= 56 ? value : value[..53] + "...";
+    }
+
     private sealed record PaletteItem(string Label, StepType? StepType = null)
     {
         public override string ToString() => Label;
     }
+
+    private sealed record StageChoice(int Index, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    internal readonly record struct GraphCanvasViewport(double Width, double Height, Vector GraphOffset);
 }

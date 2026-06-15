@@ -55,6 +55,149 @@ public sealed class VisualEditorViewModelTests
     }
 
     [Fact]
+    public void SetStageParallelUpdatesSpecAndMarksDirty()
+    {
+        var spec = CreateQuestSpec("Parallel Stage Quest");
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+
+        viewModel.SetStageParallel(stageIndex: 0, isParallel: true);
+
+        Assert.True(spec.Stages[0].IsParallel);
+        Assert.True(viewModel.IsDirty);
+        Assert.True(Assert.Single(viewModel.Graph.Nodes, node => node.Kind == QuestGraphNodeKind.Stage).IsParallelStage);
+    }
+
+    [Fact]
+    public void MoveStepToStageMovesStepRenumbersAndMarksDirty()
+    {
+        var spec = CreateQuestSpec("Move Step Quest");
+        spec.Stages.Add(new QuestStageSpec
+        {
+            Number = 2,
+            Description = "Second stage",
+            CompletedDescription = "Second stage complete"
+        });
+        var movedStep = spec.Stages[0].Steps[0];
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+
+        viewModel.MoveStepToStage(fromStageIndex: 0, fromStepIndex: 0, toStageIndex: 1);
+
+        Assert.Empty(spec.Stages[0].Steps);
+        Assert.Same(movedStep, Assert.Single(spec.Stages[1].Steps));
+        Assert.Equal(1, movedStep.Number);
+        Assert.True(viewModel.IsDirty);
+    }
+
+    [Fact]
+    public void DeleteNodeRemovesSelectedStep()
+    {
+        var spec = CreateTwoStageQuestSpec("Delete Step Quest");
+        var removedStep = spec.Stages[0].Steps[0];
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+        var nodeId = StepNodeId(viewModel, stageIndex: 0, stepIndex: 0);
+
+        var deleted = viewModel.DeleteNode(nodeId);
+
+        Assert.True(deleted);
+        Assert.DoesNotContain(removedStep, spec.Stages.SelectMany(stage => stage.Steps));
+        Assert.Equal("Step B", Assert.Single(spec.Stages[0].Steps).Description);
+        Assert.True(viewModel.IsDirty);
+    }
+
+    [Fact]
+    public void DeleteNodeRemovesSelectedStage()
+    {
+        var spec = CreateTwoStageQuestSpec("Delete Stage Quest");
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+        var nodeId = StageNodeId(viewModel, stageIndex: 0);
+
+        var deleted = viewModel.DeleteNode(nodeId);
+
+        Assert.True(deleted);
+        var stage = Assert.Single(spec.Stages);
+        Assert.Equal("Second stage", stage.Description);
+        Assert.Equal(1, stage.Number);
+        Assert.Equal(1, Assert.Single(stage.Steps).Number);
+        Assert.True(viewModel.IsDirty);
+    }
+
+    [Fact]
+    public void DeleteNodeDoesNotDeleteStartOrCompleteNodes()
+    {
+        var spec = CreateTwoStageQuestSpec("Delete Protected Node Quest");
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+
+        Assert.False(viewModel.DeleteNode("start"));
+        Assert.False(viewModel.DeleteNode("complete"));
+        Assert.Equal(2, spec.Stages.Count);
+        Assert.False(viewModel.IsDirty);
+    }
+
+    [Fact]
+    public void ConnectStepToStageMovesStepToEndOfTargetStage()
+    {
+        var spec = CreateTwoStageQuestSpec("Connect Step To Stage Quest");
+        var movedStep = spec.Stages[0].Steps[0];
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+        var sourceNodeId = StepNodeId(viewModel, stageIndex: 0, stepIndex: 0);
+        var targetNodeId = StageNodeId(viewModel, stageIndex: 1);
+
+        var connected = viewModel.ConnectNodes(sourceNodeId, targetNodeId);
+
+        Assert.True(connected);
+        Assert.Equal(["Step B"], spec.Stages[0].Steps.Select(step => step.Description));
+        Assert.Equal(["Step C", "Step A"], spec.Stages[1].Steps.Select(step => step.Description));
+        Assert.Same(movedStep, spec.Stages[1].Steps[1]);
+        Assert.True(viewModel.IsDirty);
+    }
+
+    [Fact]
+    public void ConnectStepToStepMovesSourceAfterTarget()
+    {
+        var spec = CreateTwoStageQuestSpec("Connect Step To Step Quest");
+        var movedStep = spec.Stages[0].Steps[0];
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+        var sourceNodeId = StepNodeId(viewModel, stageIndex: 0, stepIndex: 0);
+        var targetNodeId = StepNodeId(viewModel, stageIndex: 1, stepIndex: 0);
+
+        var connected = viewModel.ConnectNodes(sourceNodeId, targetNodeId);
+
+        Assert.True(connected);
+        Assert.Equal(["Step B"], spec.Stages[0].Steps.Select(step => step.Description));
+        Assert.Equal(["Step C", "Step A"], spec.Stages[1].Steps.Select(step => step.Description));
+        Assert.Same(movedStep, spec.Stages[1].Steps[1]);
+    }
+
+    [Fact]
+    public void ConnectStageToStageMovesSourceAfterTarget()
+    {
+        var spec = CreateTwoStageQuestSpec("Connect Stage To Stage Quest");
+        var movedStage = spec.Stages[0];
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), spec);
+        var sourceNodeId = StageNodeId(viewModel, stageIndex: 0);
+        var targetNodeId = StageNodeId(viewModel, stageIndex: 1);
+
+        var connected = viewModel.ConnectNodes(sourceNodeId, targetNodeId);
+
+        Assert.True(connected);
+        Assert.Equal(["Second stage", "First stage"], spec.Stages.Select(stage => stage.Description));
+        Assert.Same(movedStage, spec.Stages[1]);
+        Assert.Equal(1, spec.Stages[0].Number);
+        Assert.Equal(2, spec.Stages[1].Number);
+        Assert.True(viewModel.IsDirty);
+    }
+
+    [Fact]
+    public void MarkDirtyMarksLoadedSpecDirty()
+    {
+        var viewModel = new VisualEditorViewModel(new QuestWorkflow(), CreateQuestSpec("Dirty Quest"));
+
+        viewModel.MarkDirty();
+
+        Assert.True(viewModel.IsDirty);
+    }
+
+    [Fact]
     public void DefinitionBuilderUsesGenericNodeDefinitionForStaleIndexes()
     {
         var spec = CreateBlockedQuestSpec("Stale Definition Quest");
@@ -133,5 +276,52 @@ public sealed class VisualEditorViewModelTests
                 CompletionText = "Complete " + questName
             }
         };
+    }
+
+    private static QuestSpec CreateTwoStageQuestSpec(string questName)
+    {
+        var spec = CreateQuestSpec(questName);
+        spec.Stages[0].Description = "First stage";
+        spec.Stages[0].Steps =
+        [
+            CreateStep(1, "Step A"),
+            CreateStep(2, "Step B")
+        ];
+        spec.Stages.Add(new QuestStageSpec
+        {
+            Number = 2,
+            Description = "Second stage",
+            CompletedDescription = "Second stage complete",
+            Steps =
+            [
+                CreateStep(3, "Step C")
+            ]
+        });
+        return spec;
+    }
+
+    private static QuestStepSpec CreateStep(int number, string description)
+    {
+        return new QuestStepSpec
+        {
+            Number = number,
+            Type = StepType.Kill,
+            Description = description,
+            CompletedDescription = description + " complete",
+            QuantityMax = 1,
+            Target = ResolvedReference.Resolved("npc", description, 1000 + number, description)
+        };
+    }
+
+    private static string StageNodeId(VisualEditorViewModel viewModel, int stageIndex)
+    {
+        return Assert.Single(viewModel.Graph.Nodes, node => node.Kind == QuestGraphNodeKind.Stage && node.StageIndex == stageIndex).Id;
+    }
+
+    private static string StepNodeId(VisualEditorViewModel viewModel, int stageIndex, int stepIndex)
+    {
+        return Assert.Single(
+            viewModel.Graph.Nodes,
+            node => node.Kind == QuestGraphNodeKind.Step && node.StageIndex == stageIndex && node.StepIndex == stepIndex).Id;
     }
 }

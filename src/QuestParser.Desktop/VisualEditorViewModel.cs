@@ -78,6 +78,91 @@ internal sealed class VisualEditorViewModel
         RefreshPreview();
     }
 
+    public void SetStageParallel(int stageIndex, bool isParallel)
+    {
+        if (Spec is null)
+            return;
+
+        if (stageIndex < 0 || stageIndex >= Spec.Stages.Count)
+        {
+            AddGenerationLogEntry($"Cannot update stage: stage index {stageIndex} is not valid for {Spec.Stages.Count} stage(s).");
+            return;
+        }
+
+        _linearizer.SetStageParallel(Spec, stageIndex, isParallel);
+        IsDirty = true;
+        RebuildGraph();
+        RefreshPreview();
+    }
+
+    public void MoveStepToStage(int fromStageIndex, int fromStepIndex, int toStageIndex)
+    {
+        if (Spec is null)
+            return;
+
+        _ = TryMoveStep(fromStageIndex, fromStepIndex, toStageIndex, Spec.Stages.ElementAtOrDefault(toStageIndex)?.Steps.Count ?? 0);
+    }
+
+    public bool DeleteNode(string nodeId)
+    {
+        if (Spec is null)
+            return false;
+
+        var node = FindNode(nodeId);
+        if (node is null)
+        {
+            AddGenerationLogEntry($"Cannot delete node: '{nodeId}' was not found.");
+            return false;
+        }
+
+        if (IsStepNode(node))
+            return DeleteStepNode(node);
+
+        if (node.Kind == QuestGraphNodeKind.Stage)
+            return DeleteStageNode(node);
+
+        AddGenerationLogEntry($"Cannot delete node '{node.Id}': {node.Kind} nodes are generated workflow anchors.");
+        return false;
+    }
+
+    public bool ConnectNodes(string sourceNodeId, string targetNodeId)
+    {
+        if (Spec is null)
+            return false;
+
+        var source = FindNode(sourceNodeId);
+        var target = FindNode(targetNodeId);
+        if (source is null || target is null)
+        {
+            AddGenerationLogEntry("Cannot connect nodes: source or target was not found.");
+            return false;
+        }
+
+        if (string.Equals(source.Id, target.Id, StringComparison.Ordinal))
+        {
+            AddGenerationLogEntry("Cannot connect a node to itself.");
+            return false;
+        }
+
+        if (source.Kind == QuestGraphNodeKind.Stage && target.Kind == QuestGraphNodeKind.Stage)
+            return MoveStageAfter(source, target);
+
+        if (IsStepNode(source) && target.Kind == QuestGraphNodeKind.Stage)
+            return MoveStepToStageEnd(source, target);
+
+        if (IsStepNode(source) && IsStepNode(target))
+            return MoveStepAfterStep(source, target);
+
+        AddGenerationLogEntry($"Cannot connect {source.Kind} to {target.Kind}: this relationship is not represented by generated quest Lua.");
+        return false;
+    }
+
+    public void MarkDirty()
+    {
+        if (Spec is not null)
+            IsDirty = true;
+    }
+
     public void MoveNode(string nodeId, double x, double y)
     {
         if (Spec is null)
@@ -262,6 +347,186 @@ internal sealed class VisualEditorViewModel
         }
 
         GenerationLog.Add(message);
+    }
+
+    private bool DeleteStepNode(QuestGraphNode node)
+    {
+        if (Spec is null
+            || node.StageIndex is not int stageIndex
+            || node.StepIndex is not int stepIndex
+            || !HasStep(stageIndex, stepIndex))
+        {
+            AddGenerationLogEntry($"Cannot delete step node '{node.Id}': the node is stale.");
+            return false;
+        }
+
+        _linearizer.RemoveStep(Spec, stageIndex, stepIndex);
+        CompleteStructuralEdit(selectNode: null);
+        return true;
+    }
+
+    private bool DeleteStageNode(QuestGraphNode node)
+    {
+        if (Spec is null
+            || node.StageIndex is not int stageIndex
+            || !HasStage(stageIndex))
+        {
+            AddGenerationLogEntry($"Cannot delete stage node '{node.Id}': the node is stale.");
+            return false;
+        }
+
+        _linearizer.RemoveStage(Spec, stageIndex);
+        CompleteStructuralEdit(selectNode: null);
+        return true;
+    }
+
+    private bool MoveStageAfter(QuestGraphNode source, QuestGraphNode target)
+    {
+        if (Spec is null
+            || source.StageIndex is not int sourceStageIndex
+            || target.StageIndex is not int targetStageIndex
+            || !HasStage(sourceStageIndex)
+            || !HasStage(targetStageIndex))
+        {
+            AddGenerationLogEntry("Cannot move stage: source or target stage is stale.");
+            return false;
+        }
+
+        if (sourceStageIndex == targetStageIndex)
+            return false;
+
+        var movedStage = Spec.Stages[sourceStageIndex];
+        var insertionIndex = sourceStageIndex < targetStageIndex
+            ? targetStageIndex
+            : targetStageIndex + 1;
+        insertionIndex = Math.Clamp(insertionIndex, 0, Spec.Stages.Count - 1);
+
+        _linearizer.MoveStage(Spec, sourceStageIndex, insertionIndex);
+        CompleteStructuralEdit(() => SelectMovedStage(movedStage));
+        return true;
+    }
+
+    private bool MoveStepToStageEnd(QuestGraphNode source, QuestGraphNode target)
+    {
+        if (target.StageIndex is not int targetStageIndex || Spec is null || !HasStage(targetStageIndex))
+        {
+            AddGenerationLogEntry("Cannot move step: target stage is stale.");
+            return false;
+        }
+
+        return source.StageIndex is int sourceStageIndex
+            && source.StepIndex is int sourceStepIndex
+            && TryMoveStep(sourceStageIndex, sourceStepIndex, targetStageIndex, Spec.Stages[targetStageIndex].Steps.Count);
+    }
+
+    private bool MoveStepAfterStep(QuestGraphNode source, QuestGraphNode target)
+    {
+        if (Spec is null
+            || source.StageIndex is not int sourceStageIndex
+            || source.StepIndex is not int sourceStepIndex
+            || target.StageIndex is not int targetStageIndex
+            || target.StepIndex is not int targetStepIndex
+            || !HasStep(sourceStageIndex, sourceStepIndex)
+            || !HasStep(targetStageIndex, targetStepIndex))
+        {
+            AddGenerationLogEntry("Cannot move step: source or target step is stale.");
+            return false;
+        }
+
+        if (sourceStageIndex == targetStageIndex && sourceStepIndex == targetStepIndex)
+            return false;
+
+        var insertionIndex = sourceStageIndex == targetStageIndex && sourceStepIndex < targetStepIndex
+            ? targetStepIndex
+            : targetStepIndex + 1;
+
+        return TryMoveStep(sourceStageIndex, sourceStepIndex, targetStageIndex, insertionIndex);
+    }
+
+    private bool TryMoveStep(int fromStageIndex, int fromStepIndex, int toStageIndex, int toStepIndex)
+    {
+        if (Spec is null)
+            return false;
+
+        if (!HasStage(fromStageIndex))
+        {
+            AddGenerationLogEntry($"Cannot move step: source stage index {fromStageIndex} is not valid for {Spec.Stages.Count} stage(s).");
+            return false;
+        }
+
+        if (!HasStage(toStageIndex))
+        {
+            AddGenerationLogEntry($"Cannot move step: target stage index {toStageIndex} is not valid for {Spec.Stages.Count} stage(s).");
+            return false;
+        }
+
+        var fromStage = Spec.Stages[fromStageIndex];
+        if (!HasStep(fromStageIndex, fromStepIndex))
+        {
+            AddGenerationLogEntry($"Cannot move step: step index {fromStepIndex} is not valid for source stage {fromStage.Number}.");
+            return false;
+        }
+
+        var movedStep = fromStage.Steps[fromStepIndex];
+        _linearizer.MoveStep(Spec, fromStageIndex, fromStepIndex, toStageIndex, toStepIndex);
+        CompleteStructuralEdit(() => SelectMovedStep(movedStep));
+        return true;
+    }
+
+    private void CompleteStructuralEdit(Action? selectNode)
+    {
+        IsDirty = true;
+        RebuildGraph();
+        selectNode?.Invoke();
+        Definition = VisualEditorDefinitionBuilder.Build(Spec, SelectedNode);
+        RefreshPreview();
+    }
+
+    private void SelectMovedStage(QuestStageSpec movedStage)
+    {
+        if (Spec is null)
+            return;
+
+        var stageIndex = Spec.Stages.FindIndex(stage => ReferenceEquals(stage, movedStage));
+        SelectedNode = Graph.Nodes.FirstOrDefault(node =>
+            node.Kind == QuestGraphNodeKind.Stage
+            && node.StageIndex == stageIndex
+            && !node.Id.EndsWith("-join", StringComparison.Ordinal));
+    }
+
+    private void SelectMovedStep(QuestStepSpec movedStep)
+    {
+        if (Spec is null)
+            return;
+
+        SelectedNode = Graph.Nodes.FirstOrDefault(node =>
+            IsStepNode(node)
+            && node.StageIndex is int stageIndex
+            && node.StepIndex is int stepIndex
+            && HasStep(stageIndex, stepIndex)
+            && ReferenceEquals(Spec.Stages[stageIndex].Steps[stepIndex], movedStep));
+    }
+
+    private QuestGraphNode? FindNode(string nodeId)
+    {
+        return Graph.Nodes.FirstOrDefault(node => string.Equals(node.Id, nodeId, StringComparison.Ordinal));
+    }
+
+    private bool HasStage(int stageIndex)
+    {
+        return Spec is not null && stageIndex >= 0 && stageIndex < Spec.Stages.Count;
+    }
+
+    private bool HasStep(int stageIndex, int stepIndex)
+    {
+        return HasStage(stageIndex)
+            && stepIndex >= 0
+            && stepIndex < Spec!.Stages[stageIndex].Steps.Count;
+    }
+
+    private static bool IsStepNode(QuestGraphNode node)
+    {
+        return node.Kind is QuestGraphNodeKind.Step or QuestGraphNodeKind.RandomOptions;
     }
 
     private static string BuildWalkthrough(QuestSpec spec)
